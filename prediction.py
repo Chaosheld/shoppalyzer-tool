@@ -1,0 +1,62 @@
+import fasttext
+
+categories = {
+    0: "Beauty & Care Products",
+    1: "Decorations and Décor",
+    2: "Household and Personal Care Appliances",
+    3: "Household Care",
+    4: "Fragrances",
+    5: "Clothing",
+    6: "Flowers and Gifting",
+    7: "Kitchenware",
+    8: "Headwear",
+    9: "Backpacks, Travel and Luggage",
+    10: "Children's and Baby Toys",
+    11: "Animals and Pet Supplies",
+    12: "Small and Handbags",
+    13: "Jewellery",
+    14: "Socks, Underwear and Nightwear",
+    15: "Food",
+    16: "Plants and Garden",
+    17: "Stationery and Office Supplies",
+    18: "Arts, Crafts and Entertainment",
+    19: "Alcoholic Beverages",
+    20: "Non-Alcoholic Beverages",
+    21: "Sports, Outdoor and Camping",
+    22: "Glasses and Lenses",
+    23: "Health Care and Pharmaceuticals",
+    24: "Smoking and Headshop Supplies",
+    25: "Movies, Music, Games and Other",
+    26: "Lamps and Lighting",
+    27: "Other Accessories",
+    28: "Recreation and Leisure Time Hobbies",
+    29: "Supplements and Vitamins",
+    30: "Kitchen Appliances",
+    31: "Swim, Work and Outdoor Clothing",
+    32: "Shoes and Shoe Accessories",
+    33: "Home Textiles and Rugs",
+    34: "Headphones, Mobile Phones and Tablets",
+    35: "Home and Living",
+    36: "Eyewear and Sunglasses",
+    37: "Athletic Clothing",
+    38: "Computers and Home Entertainment",
+    39: "Adult",
+    40: "Books and eBooks",
+    41: "Collectibles",
+    42: "Hardware and Tools",
+    43: "Kitchen and Bath",
+    44: "Watches",
+    45: "Hunting and Weapons",
+    46: "Vehicles and Parts",
+    47: "Electronics and Parts",
+    48: "Cameras and Optics",
+    49: "Musical Instruments"
+}
+
+model_loaded = fasttext.load_model("./category_prediction.bin")
+
+def get_prediction(text):
+    result = model_loaded.predict(text)[0][0][9:]
+    return categories[int(result)]
+
+print(get_prediction("These are a nice pair of jeans with fluffy puffies attached to it."))
