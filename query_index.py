@@ -14,7 +14,6 @@ athena_conn = pyathena.connect(
 def store_index_query(result_df):
     # for every domain in df replace the set of found index records for given index block
     print(result_df)
-    print(len(result_df))
     print(result_df.columns)
 
     database = r"./cc.sqlite"
@@ -59,12 +58,10 @@ def query_athena(list_of_urls, index_list):
         fields = "url_host_registered_domain As domain, url_path, warc_filename, warc_record_offset, warc_record_length"
         table = '"ccindex"."ccindex"'
         conditions = f"crawl = 'CC-MAIN-{index_value}' AND subset = 'warc' AND url_host_registered_domain IN ({list_string})"
-        limit = 10000
 
         sql = (f"SELECT {fields} "
                f"FROM {table} "
                f"WHERE {conditions};")
-               #f"LIMIT {limit};")
 
         print(sql)
 

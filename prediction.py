@@ -58,5 +58,3 @@ model_loaded = fasttext.load_model("./category_prediction.bin")
 def get_prediction(text):
     result = model_loaded.predict(text)[0][0][9:]
     return categories[int(result)]
-
-print(get_prediction("These are a nice pair of jeans with fluffy puffies attached to it."))
