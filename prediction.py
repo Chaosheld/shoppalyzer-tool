@@ -56,5 +56,9 @@ categories = {
 model_loaded = fasttext.load_model("./category_prediction.bin")
 
 def get_prediction(text):
-    result = model_loaded.predict(text)[0][0][9:]
-    return categories[int(result)]
+    result = model_loaded.predict(text)
+    return {
+        'id': int(result[0][0][9:]),
+        'literal': categories[int(result[0][0][9:])],
+        'probability': result[1][0]
+    }

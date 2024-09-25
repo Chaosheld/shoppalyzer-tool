@@ -9,12 +9,16 @@ import extruct
 import lxml
 import html
 from datetime import datetime
+import time
 from os.path import exists
 from csv import writer
 import random
-import gspread as gs
+import sqlite3
+import langid
+from prediction import get_prediction
+from translation import get_translation
 
-
+# TODO: move to cleaning pipe
 def remove_duplicates(list):
     """
     :param list: all records that are each unique by address in archive
@@ -28,6 +32,7 @@ def remove_duplicates(list):
             uniq_list.append(entry)
     return uniq_list
 
+# TODO: move to cleaning pipe
 def strip_html(data):
     p = re.compile(r'<.*?>')
     return p.sub('', data)
@@ -81,7 +86,6 @@ def download_page(record):
 
 
 # Extract links from the HTML
-
 def extract_external_links(url, html_content, link_list):
     parser = BeautifulSoup(html_content, "html.parser")
 
@@ -296,14 +300,10 @@ def scrape_metadata(schema, metadata, target):
                     datablock = datablock[0]
                     if datablock['@type'] == target:
                         result_metadata = {
-                            'title': get_title(datablock),
-                            'description': get_description(datablock),
+                            'productTitle': get_title(datablock),
+                            'productDescription': get_description(datablock),
                             'brand': get_brand(datablock),
-                            'category': get_category(datablock),
-                            'breadcrumb': get_breadcrumb(datablock),
                             'price': get_price(datablock),
-                            'lowPrice': get_lowPrice(datablock),
-                            'highPrice': get_highPrice(datablock),
                             'currency': get_currency(datablock)
                         }
                         return result_metadata
@@ -314,14 +314,10 @@ def scrape_metadata(schema, metadata, target):
         for entry in metadata_container:
             if entry['@type'] == target:
                 result_metadata = {
-                    'title': get_title(entry),
-                    'description': get_description(entry),
+                    'productTitle': get_title(entry),
+                    'productDescription': get_description(entry),
                     'brand': get_brand(entry),
-                    'category': get_category(entry),
-                    'breadcrumb': get_breadcrumb(entry),
                     'price': get_price(entry),
-                    'lowPrice': get_lowPrice(entry),
-                    'highPrice': get_highPrice(entry),
                     'currency': get_currency(entry)
                 }
                 return result_metadata
@@ -334,14 +330,10 @@ def get_metadata(domain, url, metadata):
     result_metadata = {
         'domain': domain,
         'url': url,
-        'title': None,
-        'description': None,
+        'productTitle': None,
+        'productDescription': None,
         'brand': None,
-        'category': None,
-        'breadcrumb': None,
         'price': None,
-        'lowPrice': None,
-        'highPrice': None,
         'currency': None
     }
 
@@ -472,38 +464,57 @@ def get_additional_data(html_content):
 
     return dict
 
+def create_output_file(date_string):
+    update_conn = sqlite3.connect(f'./files/output/{date_string}_cc_result.sqlite')
+    cursor = update_conn.cursor()
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS cc_summary (
+        'domain' TEXT,
+        'archiveYear' TEXT,
+        'totalRecords' INTEGER,
+        'uniqueRecords' INTEGER)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS cc_metadata (
+        'domain' TEXT,
+        'url' TEXT,
+        'archiveYear' TEXT,
+        'detectedLanguage' TEXT,
+        'productTitle' TEXT,
+        'productDescription' TEXT,
+        'brand' TEXT,
+        'price' REAL,
+        'currency' TEXT,
+        'predictedCategory' INTEGER,
+        'probability' REAL)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS external_links (
+        'domain' TEXT,
+        'archiveYear' TEXT,
+        'externalLink' TEXT,
+        'count' INTEGER)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS social_links (
+        'domain' TEXT,
+        'archiveYear' TEXT,
+        'socialPlatform' TEXT,
+        'socialLink' Text)''')
+
+    update_conn.commit()
+    update_conn.close()
+
 
 def crawl_common_crawl(url_list, index_list, limit=0):
-    # generating names of output files
-    today = str(datetime.today().strftime('%Y%m%d'))
-    meta_output = './output/%s_metadata.csv' % today
-    external_links_output = './output/%s_external_links.csv' % today
-    follow_links_output = './output/%s_follow_links.csv' % today
+
     print('[*] Started to crawl %d domains from %d indices' % (len(url_list), len(index_list)))
 
-    # creating output files if not already existing to write header
-    if not exists(meta_output):
-        with open(meta_output, 'a') as output:
-            writer_object = writer(output)
-            writer_object.writerow(
-                ['Domain', 'URL', 'Product Title', 'Product Description', 'Brand', 'Category', 'Breadcrumb', 'Price',
-                 'Low Price', 'High Price', 'Currency', 'Language Code', 'Page Title', 'Page Description',
-                 'Page Keywords'])
-            output.close()
-
-    if not exists(external_links_output):
-        with open(external_links_output, 'a') as output:
-            writer_object = writer(output)
-            writer_object.writerow(['Domain', 'External', 'Occurrences'])
-            output.close()
-
-    if not exists(follow_links_output):
-        with open(follow_links_output, 'a') as output:
-            writer_object = writer(output)
-            writer_object.writerow(['Domain', 'Platform', 'Link'])
-            output.close()
-
     for url in url_list:
+        start_time = time.time()
+        today = str(datetime.today().strftime('%Y%m%d'))
+
+        update_conn = sqlite3.connect(f'./files/output/{today}_cc_result.sqlite')
+        cursor = update_conn.cursor()
+
+        create_output_file(today)
         record_list = query_db(url, index_list)
         if limit > 0:
             random.shuffle(record_list)
@@ -515,85 +526,65 @@ def crawl_common_crawl(url_list, index_list, limit=0):
             try:
                 if html_content != "":
                     metadata = extract_metadata(html_content)
-                    corpus_data = get_metadata(url, record['domain'], metadata)
+                    corpus_data = get_metadata(url, record['url_path'], metadata)
                     if check_nones(corpus_data, 3):
-                        # now that there is useful metadata we can add pagetitle, description and lang code
+                        # now that there is useful metadata we can add page title, description and lang code
                         additional_data = get_additional_data(html_content)
                         for key in additional_data:
                             corpus_data[key] = additional_data[key]
+                        # TODO: make year instead of index
+                        corpus_data['archiveYear'] = 2023
+
+                        # get translation
+                        product_string = corpus_data['productTitle'] + ' ' + corpus_data['productDescription']
+                        detected_lang = langid.classify(product_string)[0]
+                        print(detected_lang)
+                        corpus_data['detectedLanguage'] = detected_lang
+                        if not detected_lang == "en":
+                            product_string = get_translation(product_string)
+
+                        # get prediction
+                        prediction = get_prediction(product_string)
+                        print(prediction)
+                        corpus_data['predictedCategory'] = prediction['id']
+                        corpus_data['probability'] = prediction['probability']
 
                         # write line to result file with
                         print('[*] Write metadata for %s' % url)
-                        with open(meta_output, 'a') as output:
-                            writer_object = writer(output)
-                            writer_object.writerow(corpus_data.values())
-                            output.close()
+
+                        print(corpus_data)
+
+                        meta_fields = ['domain', 'url', 'archiveYear', 'detectedLanguage', 'productTitle',
+                                       'productDescription', 'brand', 'price', 'currency', 'predictedCategory',
+                                       'probability']
+                        res_val = [corpus_data[key] for key in meta_fields]
+                        sql = f'''INSERT INTO cc_metadata ({', '.join(meta_fields)}) 
+                                  VALUES ({', '.join(['?'] * len(meta_fields))})'''
+                        print(sql)
+                        cursor.execute(sql, res_val)
+                        update_conn.commit()
             except:
                 pass
 
             link_list = extract_external_links(url, html_content, link_list)
 
-        print('[*] Total external links discovered: %d' % len(link_list))
-
         uniq_externals = get_external_links(url, link_list)
-        # write result in another file
-        with open(external_links_output, 'a') as output:
-            writer_object = writer(output)
-            for key in uniq_externals:
-                writer_object.writerow([url, key, uniq_externals[key]])
-            output.close()
+        for key in uniq_externals:
+            res = [url, 2023, key, uniq_externals[key]]
+            sql = f'''INSERT INTO external_links ({', '.join(['domain', 'archiveYear', 'externalLink', 'count'])})
+                      VALUES ({', '.join(['?'] * len(res))})'''
+            cursor.execute(sql, res)
+        update_conn.commit()
         print('[*] Total uniq external links in output: %d' % len(uniq_externals))
 
         follow_links = extract_follow_links(link_list)
-        with open(follow_links_output, 'a') as output:
-            writer_object = writer(output)
-            for res_tuple in follow_links:
-                writer_object.writerow([url, res_tuple[0], res_tuple[1]])
-            output.close()
+        for res_tuple in follow_links:
+            res = [url, 2023, res_tuple[0], res_tuple[1]]
+            sql = f'''INSERT INTO social_links ({', '.join(['domain', 'archiveYear', 'socialPlatform', 'socialLink'])})
+                      VALUES ({', '.join(['?'] * len(res))})'''
+            cursor.execute(sql, res)
+        update_conn.commit()
         print('[*] Total social links to follow in output: %d' % len(follow_links))
 
-
-def crawl_cc_google(url_list, index_list, limit=0):
-    print('[*] Started to crawl %d domains from %d indices' % (len(url_list), len(index_list)))
-
-    gc = gs.service_account(filename='sacred-alliance-367913-c5d49aaa22d2.json')
-
-    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1CKZZcIX252qmMKyGxjOQnmgBU6C4jRzdA_u8GG6pR_k/")
-    ws = sh.worksheet('Productmeta')
-
-    meta_columns = ['Domain', 'URL', 'Product Title', 'Product Description', 'Brand', 'Category', 'Breadcrumb', 'Price',
-                 'Low Price', 'High Price', 'Currency', 'Language Code', 'Page Title', 'Page Description',
-                 'Page Keywords']
-
-    for url in url_list:
-        df = pd.DataFrame(columns=meta_columns)
-        record_list = query_db(url, index_list)
-        # part to deduplicate the records while in a bucket links might be crawled wy more often than once
-        record_list = remove_duplicates(record_list)
-        if limit > 0:
-            random.shuffle(record_list)
-            record_list = record_list[:limit]
-        for record in record_list:
-            html_content = download_page(record)
-            print('[*] Retrieved %d bytes for %s' % (len(html_content), record['domain']))
-            try:
-                if html_content != "":
-                    metadata = extract_metadata(html_content)
-                    corpus_data = get_metadata(url, record['domain'], metadata)
-                    if check_nones(corpus_data, 3):
-                        # now that there is useful metadata we can add page title, description and language code
-                        additional_data = get_additional_data(html_content)
-                        for key in additional_data:
-                            corpus_data[key] = additional_data[key]
-                        print('[*] Add metadata for %s' % url)
-                        prod_df = pd.DataFrame([list(corpus_data.values())], columns=meta_columns)
-                        print(prod_df['Price'])
-                        df = pd.concat([df, prod_df], ignore_index=True)
-
-            except:
-                pass
-
-        if len(df) > 0:
-            df_product_meta = pd.DataFrame(ws.get_all_records())
-            df_product_meta = pd.concat([df_product_meta, df], ignore_index=True)
-            ws.update([df_product_meta.columns.values.tolist()] + df_product_meta.values.tolist())
+        update_conn.close()
+        print("[*] Finished %s in %s seconds." % (url, time.time() - start_time))
