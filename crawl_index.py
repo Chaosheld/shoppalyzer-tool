@@ -10,23 +10,23 @@ import lxml
 import html
 from datetime import datetime
 import time
-from os.path import exists
-from csv import writer
 import random
 import sqlite3
 import langid
+import asyncio
 from prediction import get_prediction
 from translation import get_translation
+from download_crawl import download_all
 
 # TODO: move to cleaning pipe
-def remove_duplicates(list):
+def remove_duplicates(listicle):
     """
-    :param list: all records that are each unique by address in archive
+    :param listicle: all records that are each unique by address in archive
     :return: list that contains only unique url paths to avoid having same products more than one time
     """
     uniq_list = []
     seen_list = []
-    for entry in list:
+    for entry in listicle:
         if not entry["url_path"] in seen_list:
             seen_list.append(entry["url_path"])
             uniq_list.append(entry)
@@ -37,13 +37,45 @@ def strip_html(data):
     p = re.compile(r'<.*?>')
     return p.sub('', data)
 
-def clean_string(str):
-    str = strip_html(str)
-    str = re.sub(' +', ' ', str.strip().replace("\n", " "))
-    return html.unescape(str)
+def clean_string(string):
+    string = strip_html(string)
+    string = re.sub(' +', ' ', string.strip().replace("\n", " "))
+    return html.unescape(string)
 
-def clean_price(str):
-    return str.replace(',', '.')
+def clean_price(price):
+    if isinstance(price, list) or isinstance(price, tuple):
+        price = price[0]
+    if price is None:
+        return None
+    if isinstance(price, str):
+        price = price.replace(' ', '').replace(chr(160), '').replace('\'', '')
+    if re.search(r'(\D+\.)|(^\.)', price):
+        return None
+    cleaned_price = re.search(
+        r'[+-]?((\d+)+([\,\.]\d+)+)([eE][+-]?\d+)?|((\d+[\,\.]\d{2})|(\d+))([eE][+-]?\d+)?', price)
+    if cleaned_price:
+        cleaned_price = cleaned_price[0]
+        if ',' in cleaned_price or '.' in cleaned_price or '\'' in cleaned_price:
+            if re.search(r'(\,\d{2}$)', cleaned_price):
+                cleaned_price = cleaned_price.replace(',','.')
+            if re.search(r'([\,\.]\d{3}$)', cleaned_price) or re.search(r'([\,\.]\d{3}\D)', cleaned_price):
+                cleaned_price = re.sub(r'([\.\,])(\d{3}$)', r'\2', cleaned_price)# keep only the group 2
+                cleaned_price = re.sub(r'([\.\,])(\d{3}\D)', r'\2', cleaned_price)# keep only the group 2
+            try:
+                cleaned_price = float(cleaned_price)
+                return cleaned_price
+            except:
+                return None
+        # no delimiters in str, test if is just integer
+        try:
+            cleaned_price = float(cleaned_price)
+            return cleaned_price
+        except:
+            return None
+    else:
+        # no pattern of price-like numbers found
+        return None
+
 
 def query_db(url, index_list):
     database = r"./cc.sqlite"
@@ -266,14 +298,14 @@ def get_lowPrice(metadata):
 
 
 def get_highPrice(metadata):
-    if metadata.get('offers') != None:
+    if metadata.get('offers') is not None:
         if type(metadata.get('offers')) == dict:
             priceCurrency = metadata.get('offers').get('priceCurrency')
-            if priceCurrency != None:
+            if priceCurrency is not None:
                 return metadata.get('offers').get('highPrice')
         elif type(metadata.get('offers')) == list:
             priceCurrency = metadata.get('offers')[0].get('priceCurrency')
-            if priceCurrency != None:
+            if priceCurrency is not None:
                 return metadata.get('offers')[0].get('highPrice')
     key_trigger = ['highPrice']
     for key in metadata.keys():
@@ -312,16 +344,17 @@ def scrape_metadata(schema, metadata, target):
         elif (type(metadata_container) == dict) and ('@graph' in metadata_container.keys()):
             metadata_container = metadata_container.get('@graph')
         for entry in metadata_container:
-            if entry['@type'] == target:
-                result_metadata = {
-                    'productTitle': get_title(entry),
-                    'productDescription': get_description(entry),
-                    'brand': get_brand(entry),
-                    'price': get_price(entry),
-                    'currency': get_currency(entry)
-                }
-                return result_metadata
-
+            if entry is not None:
+                if '@type' in entry:
+                    if entry['@type'] == target:
+                        result_metadata = {
+                            'productTitle': get_title(entry),
+                            'productDescription': get_description(entry),
+                            'brand': get_brand(entry),
+                            'price': get_price(entry),
+                            'currency': get_currency(entry)
+                        }
+                        return result_metadata
 
 def get_metadata(domain, url, metadata):
     schemas = ['opengraph', 'microdata', 'json-ld']
@@ -344,10 +377,10 @@ def get_metadata(domain, url, metadata):
             if scraped_metadata is not None:
                 # combining information
                 for meta_key in scraped_metadata.keys():
-                    if scraped_metadata.get(meta_key) != None:
-                        if result_metadata.get(meta_key) == None:
+                    if scraped_metadata.get(meta_key) is not None:
+                        if result_metadata.get(meta_key) is None:
                             result_metadata[meta_key] = scraped_metadata.get(meta_key)
-                        elif len(scraped_metadata.get(meta_key)) > len(result_metadata.get(meta_key)):
+                        elif len(str(scraped_metadata.get(meta_key))) > len(str(result_metadata.get(meta_key))):
                             result_metadata[meta_key] = scraped_metadata.get(meta_key)
 
     return result_metadata
@@ -356,7 +389,7 @@ def get_metadata(domain, url, metadata):
 def check_nones(dictionary, minimum):
     nots = 0
     for key in dictionary:
-        if dictionary[key] != None:
+        if dictionary[key] is not None:
             nots += 1
     if nots >= minimum:
         return True
@@ -515,58 +548,62 @@ def crawl_common_crawl(url_list, index_list, limit=0):
         cursor = update_conn.cursor()
 
         create_output_file(today)
+
+        # TODO: filter record list to remove files like pdf (not useful anyway and saves time)
         record_list = query_db(url, index_list)
+        random.shuffle(record_list)
         if limit > 0:
-            random.shuffle(record_list)
             record_list = record_list[:limit]
         link_list = []
-        for record in record_list:
-            html_content = download_page(record)
-            print('[*] Retrieved %d bytes for %s' % (len(html_content), record['domain']))
-            try:
-                if html_content != "":
-                    metadata = extract_metadata(html_content)
-                    corpus_data = get_metadata(url, record['url_path'], metadata)
-                    if check_nones(corpus_data, 3):
-                        # now that there is useful metadata we can add page title, description and lang code
-                        additional_data = get_additional_data(html_content)
-                        for key in additional_data:
-                            corpus_data[key] = additional_data[key]
-                        # TODO: make year instead of index
-                        corpus_data['archiveYear'] = 2023
 
-                        # get translation
-                        product_string = corpus_data['productTitle'] + ' ' + corpus_data['productDescription']
-                        detected_lang = langid.classify(product_string)[0]
-                        print(detected_lang)
-                        corpus_data['detectedLanguage'] = detected_lang
-                        if not detected_lang == "en":
-                            product_string = get_translation(product_string)
+        # TODO: create settings with cool defaults
+        batch_size = 100
+        for c in range(0, len(record_list), batch_size):
+            batch = record_list[c:c + batch_size]
+            dump = asyncio.run(download_all(batch))
+            for record in dump:
+                if record is not None:
+                    html_content = record['response']
+                    if html_content:
+                        metadata = extract_metadata(html_content)
+                        corpus_data = get_metadata(url, record['url_path'], metadata)
+                        if check_nones(corpus_data, 3):
+                            # now that there is useful metadata we can add page title, description and lang code
+                            additional_data = get_additional_data(html_content)
+                            for key in additional_data:
+                                corpus_data[key] = additional_data[key]
+                            # TODO: make year instead of index
+                            corpus_data['archiveYear'] = 2023
 
-                        # get prediction
-                        prediction = get_prediction(product_string)
-                        print(prediction)
-                        corpus_data['predictedCategory'] = prediction['id']
-                        corpus_data['probability'] = prediction['probability']
+                            # get translation
+                            product_string = corpus_data['productTitle'] + ' ' + corpus_data['productDescription']
+                            detected_lang = langid.classify(product_string)[0]
+                            print(detected_lang)
+                            corpus_data['detectedLanguage'] = detected_lang
+                            if not detected_lang == "en":
+                                product_string = get_translation(product_string)
 
-                        # write line to result file with
-                        print('[*] Write metadata for %s' % url)
+                            # get prediction
+                            prediction = get_prediction(product_string)
+                            print(prediction)
+                            corpus_data['predictedCategory'] = prediction['id']
+                            corpus_data['probability'] = prediction['probability']
 
-                        print(corpus_data)
+                            # write line to result file with
+                            print('[*] Write metadata for %s' % url)
 
-                        meta_fields = ['domain', 'url', 'archiveYear', 'detectedLanguage', 'productTitle',
-                                       'productDescription', 'brand', 'price', 'currency', 'predictedCategory',
-                                       'probability']
-                        res_val = [corpus_data[key] for key in meta_fields]
-                        sql = f'''INSERT INTO cc_metadata ({', '.join(meta_fields)}) 
-                                  VALUES ({', '.join(['?'] * len(meta_fields))})'''
-                        print(sql)
-                        cursor.execute(sql, res_val)
-                        update_conn.commit()
-            except:
-                pass
+                            print(corpus_data)
 
-            link_list = extract_external_links(url, html_content, link_list)
+                            meta_fields = ['domain', 'url', 'archiveYear', 'detectedLanguage', 'productTitle',
+                                           'productDescription', 'brand', 'price', 'currency', 'predictedCategory',
+                                           'probability']
+                            res_val = [corpus_data[key] for key in meta_fields]
+                            sql = f'''INSERT INTO cc_metadata ({', '.join(meta_fields)}) 
+                                      VALUES ({', '.join(['?'] * len(meta_fields))})'''
+                            cursor.execute(sql, res_val)
+                            update_conn.commit()
+
+                        link_list = extract_external_links(url, html_content, link_list)
 
         uniq_externals = get_external_links(url, link_list)
         for key in uniq_externals:

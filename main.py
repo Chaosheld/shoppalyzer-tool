@@ -97,7 +97,7 @@ if __name__ == "__main__":
                     query_year = sys.argv[2]
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
-                    index_list = ["2022-49"]
+                    index_list = prepare_query(2023)
                 query_index.query_athena(url_list, index_list)
             else:
                 print("No domains provided. Please check input file.")
@@ -114,8 +114,8 @@ if __name__ == "__main__":
                     query_year = sys.argv[2]
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
-                    index_list = ["2022-49"]
-                crawl_index.crawl_common_crawl(url_list, index_list, limit=10)
+                    index_list = prepare_query(2023)
+                crawl_index.crawl_common_crawl(url_list, index_list, limit=2000)
             else:
                 print("No domains provided. Please check input file.")
         else:
