@@ -2,11 +2,11 @@ from distutils.core import setup
 
 setup(
     name='CommonCrawl',
-    version='',
+    version='0.1',
     packages=[''],
-    url='',
+    url='shoppalyzer.com',
     license='',
     author='iChaos',
-    author_email='',
+    author_email='daniel@ekorre.me',
     description=''
 )

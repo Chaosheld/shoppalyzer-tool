@@ -3,7 +3,6 @@ import aiohttp
 import zlib
 from random import randint
 from tqdm.asyncio import tqdm
-from csv import writer
 
 async def safe_download(i, c, sem):
     async with sem:  # semaphore limits num of simultaneous downloads
@@ -11,7 +10,7 @@ async def safe_download(i, c, sem):
 
 async def download_crawl(record, session):
     # throttling the speed to be polite
-    await asyncio.sleep(randint(2, 5)/1000)
+    await asyncio.sleep(randint(10, 50)/1000)
 
     data_url = "https://data.commoncrawl.org/" + record["warc_filename"]
     headers = {
@@ -39,7 +38,7 @@ async def download_crawl(record, session):
                     pass
                 if len(response):
                     return {'domain': record['domain'], 'crawl': record['crawl'], 'url_path': record['url_path'],
-                            'response': response}
+                            'response': response, 'header': header}
                 else:
                     print(f"There is no response for this url: {record['domain']}{record['url_path']}")
                     return
@@ -47,9 +46,7 @@ async def download_crawl(record, session):
                 return
         else:
             print('An error occurred')
-            with open('./files/output/tracking/errors.csv', 'a', encoding='utf-8', newline='') as f_object:
-                writer_object = writer(f_object, delimiter=';')
-                writer_object.writerow([record['domain'], record['url_path'], r_status])
+            print([record['domain'], record['url_path'], r_status])
             return
 
 
