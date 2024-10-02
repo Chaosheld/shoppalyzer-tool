@@ -76,6 +76,27 @@ def check_nones(dictionary, minimum):
         return False
 
 
+def parse_header(header_str):
+    header_dict = {}
+    lines = header_str.strip().splitlines()
+
+    for line in lines:
+        if ': ' in line:
+            key, value = line.split(': ', 1)
+            # if key already exists (e.g. Set-Cookie) make a list
+            if key in header_dict:
+                if isinstance(header_dict[key], list):
+                    header_dict[key].append(value)
+                else:
+                    header_dict[key] = [header_dict[key], value]
+            else:
+                header_dict[key] = value
+        else:
+            if 'HTTP/' in line:
+                header_dict['Status'] = line
+    return header_dict
+
+
 def create_output_file(date_string):
     update_conn = sqlite3.connect(f'./files/output/{date_string}_cc_result.sqlite')
     cursor = update_conn.cursor()
@@ -127,6 +148,7 @@ def crawl_common_crawl(url_list, index_list, limit=0):
         cursor = update_conn.cursor()
 
         create_output_file(today)
+        detected_tech = {}
 
         record_list = query_pq(url, index_list)
         random.shuffle(record_list)
@@ -135,7 +157,7 @@ def crawl_common_crawl(url_list, index_list, limit=0):
         link_list = []
 
         # TODO: create settings with cool defaults
-        batch_size = 100
+        batch_size = 10
         for c in range(0, len(record_list), batch_size):
             batch = record_list[c:c + batch_size]
             dump = asyncio.run(download_all(batch))
@@ -145,7 +167,8 @@ def crawl_common_crawl(url_list, index_list, limit=0):
                     header = record['header']
 
                     # experimental technology lookup
-                    get_technology(html_content, header)
+                    detected_tech.update(get_technology(url, html_content, parse_header(header)))
+                    print(detected_tech)
 
                     if html_content:
                         metadata = get_markups(html_content)
