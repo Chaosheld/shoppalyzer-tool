@@ -3,12 +3,14 @@ import json
 from typing import Callable, Dict, Iterable, Any, Mapping, Set, List, Optional
 from fingerprint import Fingerprint, Pattern, Technology, Category
 from webpage import WebPage
+from helpers import load_json_files
 
-with open('technologies.json', 'r', encoding='utf-8') as fd:
-    obj = json.load(fd)
+with open('src/categories.json', 'r', encoding='utf-8') as fd:
+    categories: Dict[str, Any] = json.load(fd)
 
-categories: Dict[str, Any] = obj['categories']
-main_technologies: Dict[str, Any] = obj['technologies']
+#categories: Dict[str, Any] = obj['categories']
+#main_technologies: Dict[str, Any] = obj['technologies']
+main_technologies: Dict[str, Any] = load_json_files('src/technologies')
 categories: Mapping[str, Category] = {k:Category(**v) for k,v in categories.items()}
 main_technologies: Mapping[str, Fingerprint] = {k:Fingerprint(name=k, **v) for k,v in main_technologies.items()}
 
@@ -83,10 +85,18 @@ def _has_technology(tech_fingerprint: Fingerprint, webpage) -> bool:
                 for attrname, patterns in list(selector.attributes.items()):
                     _content = item.attributes.get(attrname)
                     if _content:
-                        for pattern in patterns:
-                            if pattern.regex.search(_content):
-                                _set_detected_app(webpage.url, tech_fingerprint, 'dom', pattern, value=_content)
-                                has_tech = True
+                        if isinstance(_content, list):
+                            for _element in _content:
+                                for pattern in patterns:
+                                    if pattern.regex.search(_element):
+                                        _set_detected_app(webpage.url, tech_fingerprint, 'dom', pattern, value=_element)
+                                        has_tech = True
+                        else:
+                            for pattern in patterns:
+                                if pattern.regex.search(_content):
+                                    _set_detected_app(webpage.url, tech_fingerprint, 'dom', pattern, value=_content)
+                                    has_tech = True
+
     return has_tech
 
 def _set_detected_app(url: str, tech_fingerprint: Fingerprint, app_type: str, pattern: Pattern,

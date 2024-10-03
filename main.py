@@ -115,7 +115,7 @@ if __name__ == "__main__":
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
                     index_list = prepare_query(2023)
-                crawl_index.crawl_common_crawl(url_list, index_list, limit=100)
+                crawl_index.crawl_common_crawl(url_list, index_list, limit=20)
             else:
                 print("No domains provided. Please check input file.")
         else:

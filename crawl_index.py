@@ -101,16 +101,17 @@ def create_output_file(date_string):
     update_conn = sqlite3.connect(f'./files/output/{date_string}_cc_result.sqlite')
     cursor = update_conn.cursor()
 
+    # TODO: populate table
     cursor.execute('''CREATE TABLE IF NOT EXISTS cc_summary (
         'domain' TEXT,
-        'archiveYear' TEXT,
+        'archiveYear' INTEGER,
         'totalRecords' INTEGER,
         'uniqueRecords' INTEGER)''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cc_metadata (
         'domain' TEXT,
         'url' TEXT,
-        'archiveYear' TEXT,
+        'archiveYear' INTEGER,
         'detectedLanguage' TEXT,
         'productTitle' TEXT,
         'productDescription' TEXT,
@@ -122,15 +123,21 @@ def create_output_file(date_string):
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS external_links (
         'domain' TEXT,
-        'archiveYear' TEXT,
+        'archiveYear' INTEGER,
         'externalLink' TEXT,
         'count' INTEGER)''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS social_links (
         'domain' TEXT,
-        'archiveYear' TEXT,
+        'archiveYear' INTEGER,
         'socialPlatform' TEXT,
-        'socialLink' Text)''')
+        'socialLink' TEXT)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS technology (
+        'domain' TEXT,
+        'archiveYear' INTEGER,
+        'technology' TEXT,
+        'versions' TEXT)''')
 
     update_conn.commit()
     update_conn.close()
@@ -148,7 +155,7 @@ def crawl_common_crawl(url_list, index_list, limit=0):
         cursor = update_conn.cursor()
 
         create_output_file(today)
-        detected_tech = {}
+        detected_technology = {}
 
         record_list = query_pq(url, index_list)
         random.shuffle(record_list)
@@ -157,6 +164,9 @@ def crawl_common_crawl(url_list, index_list, limit=0):
         link_list = []
 
         # TODO: create settings with cool defaults
+        # TODO: create sliding window and rules as break criteria
+        # TODO: make a cleaning of currencies and prices
+        # TODO: regex and NER for brands and tagging
         batch_size = 10
         for c in range(0, len(record_list), batch_size):
             batch = record_list[c:c + batch_size]
@@ -166,9 +176,7 @@ def crawl_common_crawl(url_list, index_list, limit=0):
                     html_content = record['response']
                     header = record['header']
 
-                    # experimental technology lookup
-                    detected_tech.update(get_technology(url, html_content, parse_header(header)))
-                    print(detected_tech)
+                    detected_technology.update(get_technology(url, html_content, parse_header(header)))
 
                     if html_content:
                         metadata = get_markups(html_content)
@@ -242,6 +250,16 @@ def crawl_common_crawl(url_list, index_list, limit=0):
             cursor.execute(sql, res)
         update_conn.commit()
         print('[*] Total social links to follow in output: %d' % len(follow_links))
+
+        for technology in detected_technology:
+            print(technology)
+            v = max(detected_technology[technology]['versions']) if detected_technology[technology]['versions'] else None
+            res = [url, 2023, technology, v]
+            sql = f'''INSERT INTO technology ({', '.join(['domain', 'archiveYear', 'technology', 'versions'])})
+                      VALUES ({', '.join(['?'] * len(res))})'''
+            cursor.execute(sql, res)
+        update_conn.commit()
+        print('[*] Total technologies detected and stored in output: %d' % len(detected_technology))
 
         update_conn.close()
         print("[*] Finished %s in %s seconds." % (url, time.time() - start_time))
