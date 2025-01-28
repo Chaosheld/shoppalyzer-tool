@@ -53,7 +53,7 @@ categories = {
     49: "Musical Instruments"
 }
 
-model_loaded = fasttext.load_model("./category_prediction.bin")
+model_loaded = fasttext.load_model("files/category_prediction.bin")
 
 def get_prediction(text):
     result = model_loaded.predict(text)
