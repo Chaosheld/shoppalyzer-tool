@@ -62,7 +62,7 @@ def init_db():
     else:
         print("Error, cannot create the database connection.")
 
-
+#TODO: Dict externalisieren und Update periodisch automatisieren
 def prepare_query(year_value):
     year_value = int(year_value)
     crawl_index_dict = {
@@ -72,7 +72,9 @@ def prepare_query(year_value):
         2021: ['2021-04', '2021-10', '2021-17', '2021-21', '2021-25', '2021-31', '2021-39', '2021-43', '2021-49'],
         2022: ['2022-05', '2022-21', '2022-27', '2022-33', '2022-40', '2022-49'],
         2023: ['2023-06', '2023-14', '2023-23', '2023-40', '2023-50'],
-        2024: ['2024-10', '2024-18', '2024-22', '2024-26', '2024-30', '2024-33', '2024-38']
+        2024: ['2024-10', '2024-18', '2024-22', '2024-26', '2024-30', '2024-33', '2024-38', '2024-42', '2024-46',
+               '2024-51'],
+        2025: ['2025-05']
     }
     if year_value in crawl_index_dict.keys():
         return crawl_index_dict[year_value]
@@ -97,7 +99,8 @@ if __name__ == "__main__":
                     query_year = sys.argv[2]
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
-                    index_list = prepare_query(2023)
+                    index_list = prepare_query(2024)
+                # TODO: Chunking der Input-Liste in 1000er Blöcke
                 query_index.query_athena(url_list, index_list)
             else:
                 print("No domains provided. Please check input file.")
