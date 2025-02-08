@@ -155,15 +155,15 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                             title = str(corpus_data.get('product_title', '')).strip()
                             description = str(corpus_data.get('product_description', '')).strip()
 
-                            invalid_values = {'none', 'null', 'undefined', ''}
+                            invalid_values = {None, 'none', 'null', 'undefined', ''}
 
                             if title not in invalid_values:
                                 if description not in invalid_values:
-                                    product_string = corpus_data['product_title'] + '. ' + corpus_data['product_description']
+                                    product_string = title + '. ' + description
                                 else:
-                                    product_string = corpus_data['product_title']
+                                    product_string = description
                             else:
-                                product_string = corpus_data.get('product_description', '')
+                                product_string = description
 
                             if product_string is not None and len(product_string) > 0:
                                 detected_lang = langid.classify(product_string)[0]
@@ -239,9 +239,11 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
 
             for key, value in detected_technology.items():
                 v = max(value['versions']) if value['versions'] else None
-                data_list.append([url, query_year, key, v, update_date])
+                c = value['categories']
+                data_list.append([url, query_year, key, v, c, update_date])
 
-            res_df = pd.DataFrame(data_list, columns=['domain', 'archive_year', 'technology', 'version', 'last_update'])
+            res_df = pd.DataFrame(data_list,
+                                  columns=['domain', 'archive_year', 'technology', 'version', 'categories', 'last_update'])
             output_file_technology = f'{base_path}/technology.pq'
 
             if os.path.exists(output_file_technology):
