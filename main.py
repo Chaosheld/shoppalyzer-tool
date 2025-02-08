@@ -1,66 +1,9 @@
-import os
-import sqlite3
 import sys
-from sqlite3 import Error
 import pandas as pd
 import query_index
 import crawl_index
-
-def create_connection(db_file):
-    """ create a database connection to a SQLite database """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-        return conn
-    except Error as e:
-        print(e)
-    return conn
-
-
-def create_table(conn, create_table_sql):
-    """ create a table from the create_table_sql statement
-    :param conn: Connection object
-    :param create_table_sql: a CREATE TABLE statement
-    :return:
-    """
-    try:
-        c = conn.cursor()
-        c.execute(create_table_sql)
-    except Error as e:
-        print(e)
-
-
-def init_db():
-    database = r"./cc.sqlite"
-
-    if os.path.exists(database):
-        os.remove(database)
-
-    sql_create_meta_table = """ CREATE TABLE IF NOT EXISTS cc_meta (
-                                        domain text NOT NULL,
-                                        crawl text NOT NULL,
-                                        count integer NOT NULL
-                                    ); """
-
-    sql_create_index_table = """CREATE TABLE IF NOT EXISTS cc_index (
-                                    domain text NOT NULL,
-                                    crawl text NOT NULL,
-                                    url_path text NOT NULL,
-                                    warc_filename text NOT NULL,
-                                    warc_record_offset integer NOT NULL,
-                                    warc_record_length integer NOT NULL
-                                );"""
-
-    # create a database connection
-    conn = create_connection(database)
-
-    # create tables
-    if conn is not None:
-        create_table(conn, sql_create_meta_table)
-        create_table(conn, sql_create_index_table)
-        conn.close()
-    else:
-        print("Error, cannot create the database connection.")
+import notification
+import traceback
 
 #TODO: Dict externalisieren und Update periodisch automatisieren
 def prepare_query(year_value):
@@ -85,9 +28,7 @@ def prepare_query(year_value):
 if __name__ == "__main__":
     query_year = 2024
     if len(sys.argv) > 1:
-        if sys.argv[1] == "init":
-            init_db()
-        elif sys.argv[1] == "query":
+        if sys.argv[1] == "query":
             """
                 assumes a csv file called input.csv with domains row by row
                 second argument optional year value with latest bucket as default
@@ -120,7 +61,26 @@ if __name__ == "__main__":
                 if len(index_list) == 0:
                     index_list = prepare_query(query_year)
                 # TODO: Limit dynamisch/regelbasiert und Live Crawl kombinieren
-                crawl_index.crawl_common_crawl(url_list, index_list, query_year, limit=500)
+                try:
+                    crawl_index.crawl_common_crawl(url_list, index_list, query_year, limit=500)
+                    subject = f'Shoppalyzer finished a task with {len(url_list)} URLs successfully!'
+                    body = f"""
+                    The task for Shoppalyzer with {len(url_list)} URLs for {query_year} is done and 
+                    data is ready to be processed.\n
+                    The following URLs have been checked:\n
+                    {url_list}
+                    """
+                    notification.send_email(subject, body)
+                except Exception as e:
+                    error_message = traceback.format_exc()
+                    subject = f'Shoppalyzer has encountered an issue that needs your attention'
+                    body = f"""
+                    The task for Shoppalyzer has ended with an error:\n
+                    {traceback.format_exc()}
+                    """
+                    notification.send_email(subject, body)
+                    raise Exception
+
             else:
                 print("No domains provided. Please check input file.")
         else:

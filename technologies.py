@@ -154,8 +154,10 @@ async def analyze_with_versions_and_categories(webpage, enable_dom: bool) -> Dic
         versioned_apps[app_name]["categories"] = get_categories(app_name)
     return versioned_apps
 
+
 def get_versions(url: str, app_name: str) -> List[str]:
     return detected_technologies.get(url, {}).get(app_name, Technology(app_name)).versions
+
 
 def get_categories(tech_name: str) -> List[str]:
     cat_nums = main_technologies[tech_name].cats if tech_name in main_technologies else []
