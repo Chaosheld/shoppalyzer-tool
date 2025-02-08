@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 with open('src/categories.json', 'r', encoding='utf-8') as fd:
     categories: Dict[str, Any] = json.load(fd)
 
-CACHE_FILE = 'pattern_cache.pkl'
+CACHE_FILE = 'src/pattern_cache.pkl'
 
 main_technologies: Dict[str, Any] = load_json_files('src/technologies')
 categories: Mapping[str, Category] = {k: Category(**v) for k, v in categories.items()}
