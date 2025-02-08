@@ -35,7 +35,6 @@ def clean_price(price):
         price = price.replace(' ', '').replace(chr(160), '').replace('\'', '')
         if price is None or re.search(r'(\D+\.)|(^\.)', price):
             return None
-    print(price)
     cleaned_price = re.search(
         r'[+-]?((\d+)+([\,\.]\d+)+)([eE][+-]?\d+)?|((\d+[\,\.]\d{2})|(\d+))([eE][+-]?\d+)?', str(price))
     if cleaned_price:

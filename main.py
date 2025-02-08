@@ -83,6 +83,7 @@ def prepare_query(year_value):
 
 
 if __name__ == "__main__":
+    query_year = 2024
     if len(sys.argv) > 1:
         if sys.argv[1] == "init":
             init_db()
@@ -99,7 +100,7 @@ if __name__ == "__main__":
                     query_year = sys.argv[2]
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
-                    index_list = prepare_query(2024)
+                    index_list = prepare_query(query_year)
                 # TODO: Chunking der Input-Liste in 1000er Blöcke
                 query_index.query_athena(url_list, index_list)
             else:
@@ -117,8 +118,9 @@ if __name__ == "__main__":
                     query_year = sys.argv[2]
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
-                    index_list = prepare_query(2023)
-                crawl_index.crawl_common_crawl(url_list, index_list, limit=20)
+                    index_list = prepare_query(query_year)
+                # TODO: Limit dynamisch/regelbasiert und Live Crawl kombinieren
+                crawl_index.crawl_common_crawl(url_list, index_list, query_year, limit=500)
             else:
                 print("No domains provided. Please check input file.")
         else:

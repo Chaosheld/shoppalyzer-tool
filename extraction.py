@@ -351,8 +351,8 @@ def scrape_metadata(schema, metadata, target):
                     datablock = datablock[0]
                     if datablock['@type'] == target:
                         result_metadata = {
-                            'productTitle': get_title(datablock),
-                            'productDescription': get_description(datablock),
+                            'product_title': get_title(datablock),
+                            'product_description': get_description(datablock),
                             'brand': get_brand(datablock),
                             'price': get_price(datablock),
                             'currency': get_currency(datablock)
@@ -367,8 +367,8 @@ def scrape_metadata(schema, metadata, target):
                 if '@type' in entry:
                     if entry['@type'] == target:
                         result_metadata = {
-                            'productTitle': get_title(entry),
-                            'productDescription': get_description(entry),
+                            'product_title': get_title(entry),
+                            'product_description': get_description(entry),
                             'brand': get_brand(entry),
                             'price': get_price(entry),
                             'currency': get_currency(entry)
@@ -383,8 +383,8 @@ def get_metadata(domain, url, metadata):
     result_metadata = {
         'domain': domain,
         'url': url,
-        'productTitle': None,
-        'productDescription': None,
+        'product_title': None,
+        'product_description': None,
         'brand': None,
         'price': None,
         'currency': None
@@ -393,7 +393,6 @@ def get_metadata(domain, url, metadata):
     for schema in schemas:
         for schema_type in schema_types:
             scraped_metadata = scrape_metadata(schema, metadata, schema_type)
-            # print(scraped_metadata)
             if scraped_metadata is not None:
                 # combining information
                 for meta_key in scraped_metadata.keys():

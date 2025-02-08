@@ -88,7 +88,7 @@ class Fingerprint:
         self.cpe: Optional[str] = attrs.get('cpe')  # type:ignore
         self.saas: Optional[bool] = attrs.get('saas')  # type:ignore
         self.oss: Optional[bool] = attrs.get('oss')  # type:ignore
-        self.pricing: List[str] = self._prepare_list(attrs['princing']) if 'princing' in attrs else []
+        self.pricing: List[str] = self._prepare_list(attrs['pricing']) if 'pricing' in attrs else []
 
         # Implies and cie
         self.implies: List[str] = self._prepare_list(attrs['implies']) if 'implies' in attrs else []
