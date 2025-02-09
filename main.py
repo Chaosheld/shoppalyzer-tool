@@ -63,19 +63,19 @@ if __name__ == "__main__":
                 # TODO: Limit dynamisch/regelbasiert und Live Crawl kombinieren
                 try:
                     crawl_index.crawl_common_crawl(url_list, index_list, query_year, limit=500)
+                    url_text = "\n".join(url_list)
                     subject = f'Shoppalyzer finished a task with {len(url_list)} URLs successfully!'
-                    body = f"""
-                    The task for Shoppalyzer with {len(url_list)} URLs for {query_year} is done and 
-                    data is ready to be processed.\n
-                    The following URLs have been checked:\n
-                    {url_list}
+                    body = f"""The task for Shoppalyzer with {len(url_list)} URLs for {query_year} is done and  data is ready to be processed.
+                    
+                    The following URLs have been checked:
+                    {url_text}
                     """
                     notification.send_email(subject, body)
                 except Exception as e:
                     error_message = traceback.format_exc()
                     subject = f'Shoppalyzer has encountered an issue that needs your attention'
-                    body = f"""
-                    The task for Shoppalyzer has ended with an error:\n
+                    body = f"""The task for Shoppalyzer has ended with an error:
+                    
                     {traceback.format_exc()}
                     """
                     notification.send_email(subject, body)
