@@ -372,7 +372,6 @@ def scrape_metadata(schema, metadata, target):
     metadata_container = metadata[schema]
 
     if len(metadata_container) > 0:
-
         # handling grouped products (bundles)
         if type(metadata_container[0]) == dict:
             if "ProductGroup" in metadata_container[0].values() and "hasVariant" in metadata_container[0]:
@@ -381,7 +380,6 @@ def scrape_metadata(schema, metadata, target):
             if "ProductGroup" in metadata_container[0][0].values() and "hasVariant" in metadata_container[0][0]:
                 metadata_container = metadata_container[0][0].get("hasVariant")
             metadata_container = metadata_container[0]
-
         if len(metadata_container) > 1:
             for datablock in metadata_container:
                 if (type(datablock) == list) and (len(datablock) > 0) and ('@graph' in datablock[0].keys()):
@@ -389,17 +387,17 @@ def scrape_metadata(schema, metadata, target):
                 elif (type(datablock) == dict) and ('@graph' in datablock.keys()):
                     datablock = datablock.get('@graph')
                 if (type(datablock) == list) and (len(datablock) > 0):
-                    datablock = datablock[0]
-                    if '@type' in datablock:
-                        if target in datablock['@type']:
-                            result_metadata = {
-                                'product_title': get_title(datablock),
-                                'product_description': get_description(datablock),
-                                'brand': get_brand(datablock),
-                                'price': get_price(datablock),
-                                'currency': get_currency(datablock)
-                            }
-                            return result_metadata
+                    for block in datablock:
+                        if '@type' in block:
+                            if target in block['@type']:
+                                result_metadata = {
+                                    'product_title': get_title(block),
+                                    'product_description': get_description(block),
+                                    'brand': get_brand(block),
+                                    'price': get_price(block),
+                                    'currency': get_currency(block)
+                                }
+                                return result_metadata
 
         for entry in metadata_container:
             if entry is not None:

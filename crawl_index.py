@@ -261,11 +261,11 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
 
 
         tracking_data = {
-            'domain': url,
-            'archive_year': query_year,
-            'record_count_unique': record_count,
-            'record_count_checked': len(record_list),
-            'last_update': update_date
+            'domain': [url],
+            'archive_year': [query_year],
+            'record_count_unique': [record_count],
+            'record_count_checked': [len(record_list)],
+            'last_update': [update_date]
             }
         tracking_df = pd.DataFrame(tracking_data)
         output_file_tracking = f'files/output/tracking.pq'
