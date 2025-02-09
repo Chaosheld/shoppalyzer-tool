@@ -78,11 +78,12 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
         record_count = len(record_list)
 
         random.shuffle(record_list)
-        if limit > 0:
-            record_list = record_list[:limit]
+        #if limit > 0:
+        #    record_list = record_list[:limit]
         link_list = []
         target = len(record_list)
-        counter = 0
+        page_counter = 0
+        product_counter = 0
 
         # TODO: create settings with cool defaults
         # TODO: create sliding window and rules as break criteria
@@ -93,11 +94,13 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
         # technology lookup for dom is expensive and stops earlier
         # TODO: move limit for counter into settings
         dom_enabled = True
-        dom_limit = 10
+        dom_limit = 5
         dom_change_counter = 0
 
-        for c in range(0, len(record_list), batch_size):
-            batch = record_list[c:c + batch_size]
+        while page_counter <= len(record_list) and page_counter <= 1000 and product_counter <= 100:
+            #for c in range(0, len(record_list), batch_size):
+                #batch = record_list[c:c + batch_size]
+            batch = record_list[page_counter:page_counter + batch_size]
             dump = asyncio.run(download_all(batch))
             for record in dump:
                 if record is not None:
@@ -109,6 +112,7 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
 
                     #TODO: detected technology should return category too
                     detected_technology.update(get_technology(url, html_content, parse_header(header), dom_enabled))
+                    print(f'[*] {len(detected_technology)} technologies for {url} detected, DOM: {dom_enabled}')
 
                     # checking if new technology was found
                     if len(detected_technology) > previous_count:
@@ -156,6 +160,7 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                                 corpus_data['product_schema'] = product_schema
 
                                 print(f'[*] Found product for {url} with schema: {title}')
+                                product_counter += 1
                                 product_list.append(corpus_data)
 
                         # starting pattern search
@@ -196,15 +201,16 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                                         corpus_data['currency'] = currency
 
                                     print(f'[*] Found product for {url} with patterns: {title}')
+                                    product_counter += 1
                                     product_list.append(corpus_data)
 
 
                         link_list = extract_external_links(url, html_content, link_list)
 
                 # some tracking
-                counter += 1
-                progress = (counter / target * 100) if target else 0
-                print(f'[*] Progress at {progress:.1f}%')
+                page_counter += 1
+                progress = (page_counter / target * 100) if target else 0
+                print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
 
 
         ### Detected Products of Shop

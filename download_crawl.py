@@ -56,11 +56,15 @@ async def download_crawl(record, session):
                 try:
                     data = zlib.decompress(d, wbits=zlib.MAX_WBITS | 16)
                 except:
-                    data = b""  # Leere Bytes als Fallback
+                    data = b""  # empty bytes as fallback
 
                 if len(data):
                     try:
-                        warc, header, response = data.decode("utf-8").strip().split("\r\n\r\n", 2)
+                        try:
+                            warc, header, response = data.decode("utf-8").strip().split("\r\n\r\n", 2)
+                        except ValueError as e:
+                            print(f"Value error: {e}")
+                            response = ""
                     except UnicodeDecodeError:
                         # non-standard UTF8 encoding
                         encoding = detect_encoding(data)
