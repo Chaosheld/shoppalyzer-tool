@@ -1,9 +1,31 @@
 import asyncio
 import aiohttp
 import zlib
+import random
+import chardet
 from random import randint
 from tqdm.asyncio import tqdm
-import random
+from bs4 import BeautifulSoup
+
+
+def detect_encoding(data_bytes):
+    """Erkennt die beste Zeichenkodierung für HTML-Seiten."""
+    detected_encoding = chardet.detect(data_bytes)["encoding"] or "ISO-8859-1"
+
+    # Prüfe, ob das HTML selbst eine Kodierung vorgibt (aus <meta charset>)
+    try:
+        soup = BeautifulSoup(data_bytes, "html.parser")
+        meta_tag = soup.find("meta", charset=True) or soup.find("meta", attrs={"http-equiv": "Content-Type"})
+        if meta_tag:
+            if meta_tag.has_attr("charset"):
+                detected_encoding = meta_tag["charset"]
+            elif "charset=" in meta_tag.get("content", ""):
+                detected_encoding = meta_tag["content"].split("charset=")[-1].strip()
+    except Exception:
+        pass  # Falls BeautifulSoup fehlschlägt, ignorieren
+
+    return detected_encoding
+
 
 async def safe_download(i, c, sem):
     async with sem:  # semaphore limits num of simultaneous downloads
@@ -34,13 +56,22 @@ async def download_crawl(record, session):
                 try:
                     data = zlib.decompress(d, wbits=zlib.MAX_WBITS | 16)
                 except:
-                    data = []
-                response = ""
+                    data = b""  # Leere Bytes als Fallback
+
                 if len(data):
                     try:
                         warc, header, response = data.decode("utf-8").strip().split("\r\n\r\n", 2)
-                    except:
-                        pass
+                    except UnicodeDecodeError:
+                        # non-standard UTF8 encoding
+                        encoding = detect_encoding(data)
+                        print(f"Weird encoding for HTML content detected: {encoding}")
+
+                        try:
+                            warc, header, response = data.decode(encoding, errors="replace").strip().split("\r\n\r\n", 2)
+                        except Exception as e:
+                            print(f"Error decoding the HTML content with {encoding}: {e}")
+                            response = ""
+
                     if len(response):
                         return {'domain': record['domain'], 'crawl': record['crawl'], 'url_path': record['url_path'],
                                 'response': response, 'header': header}

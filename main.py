@@ -66,11 +66,10 @@ if __name__ == "__main__":
                     url_text = "\n".join(url_list)
                     subject = f'Shoppalyzer finished a task with {len(url_list)} URLs successfully!'
                     body = f"""The task for Shoppalyzer with {len(url_list)} URLs for {query_year} is done and  data is ready to be processed.
-                    
-                    The following URLs have been checked:
-                    {url_text}
+                    \nThe following URLs have been checked:
+                    \n{url_text}
                     """
-                    notification.send_email(subject, body)
+                    #notification.send_email(subject, body)
                 except Exception as e:
                     error_message = traceback.format_exc()
                     subject = f'Shoppalyzer has encountered an issue that needs your attention'
@@ -78,7 +77,7 @@ if __name__ == "__main__":
                     
                     {traceback.format_exc()}
                     """
-                    notification.send_email(subject, body)
+                    #notification.send_email(subject, body)
                     raise Exception
 
             else:

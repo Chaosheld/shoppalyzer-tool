@@ -6,6 +6,7 @@ import lxml
 import html
 import json
 from cleaning import clean_string, clean_price
+from src.patterns import patterns_product_pages, patterns_prices, patterns_currencies
 
 # Extract links from HTML
 def extract_external_links(url, html_content, link_list):
@@ -458,3 +459,30 @@ def get_metadata(domain, url, metadata):
                             result_metadata[meta_key] = scraped_metadata.get(meta_key)
 
     return result_metadata
+
+
+def identify_product(url):
+    """Returns a boolean value if page link resembles a typical product link."""
+    for pattern in patterns_product_pages:
+        if url is not None and len(url) > 0:
+            if re.search(f'(.|^)*{pattern}(.)*', url):
+                return True
+    return False
+
+
+def get_price_from_html(html_content):
+    for pattern_price in patterns_prices:
+        match = re.search(pattern_price[0], html_content.lower())
+        if match:
+            price = clean_price(match.group(pattern_price[1]))
+            if price:
+                return price
+
+
+def get_currency_from_html(html_content):
+    for pattern_currency in patterns_currencies:
+        match = re.search(pattern_currency[0], html_content.lower())
+        if match:
+            currency = clean_string(match.group(pattern_currency[1]))
+            if currency:
+                return currency
