@@ -96,7 +96,10 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                                'product_description', 'brand', 'price', 'currency', 'last_update']
         detected_technology = {}
 
+        # getting all queried records from Common Crawl
         record_list = query_pq(url, index_list)
+        record_count = len(record_list)
+
         random.shuffle(record_list)
         if limit > 0:
             record_list = record_list[:limit]
@@ -256,5 +259,24 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
             combined_df.to_parquet(output_file_technology, index=False)
             print(f'[*] Total technologies detected and stored in output: {len(detected_technology)}')
 
+
+        tracking_data = {
+            'domain': url,
+            'archive_year': query_year,
+            'record_count_unique': record_count,
+            'record_count_checked': len(record_list),
+            'last_update': update_date
+            }
+        tracking_df = pd.DataFrame(tracking_data)
+        output_file_tracking = f'files/output/tracking.pq'
+
+        if os.path.exists(output_file_tracking):
+            existing_df = pd.read_parquet(output_file_tracking)
+            combined_df = pd.concat([existing_df, tracking_df])
+            combined_df = combined_df.sort_values('last_update').drop_duplicates(subset=['domain'], keep='last')
+        else:
+            combined_df = tracking_df
+
+        combined_df.to_parquet(output_file_tracking, index=False)
 
         print(f'[*] Finished {url} in {time.time() - start_time:.1f} seconds.')

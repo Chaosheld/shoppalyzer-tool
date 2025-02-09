@@ -60,13 +60,18 @@ def get_markups(html_data):
     for json_element in soup.find_all('script', type='application/ld+json'):
         try:
             product_script = json.loads(json_element.text)
-            if type(product_script) == dict:
-                if "Product" in product_script.values():
+            if isinstance(product_script, list):
+                product_script = product_script[0]
+
+            if "mainEntity" in product_script and isinstance(product_script["mainEntity"], dict):
+                product_script = product_script["mainEntity"]
+
+            if "@type" in product_script:
+                types = product_script["@type"]
+                if isinstance(types, list) and "Product" in types or types == "Product":
                     metadata['json-ld'].append(product_script)
-            else:
-                if "Product" in product_script[0].values():
-                    metadata['json-ld'].append(product_script)
-        except:
+
+        except json.JSONDecodeError:
             pass
     return metadata
 
@@ -95,28 +100,32 @@ def get_title(metadata):
                 res = clean_string(metadata.get(trigger))
                 return html.unescape(res)
     if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    res = clean_string(metadata['offers'].get(trigger))
-                    return html.unescape(res)
+        if metadata['offers']:
+            for key in metadata['offers']:
+                for trigger in key_trigger:
+                    if key == trigger:
+                        res = clean_string(metadata['offers'].get(trigger))
+                        return html.unescape(res)
     return None
 
 
 def get_brand(metadata):
-    key_trigger = ['brand', 'Brand', 'product:brand']
+    key_trigger = ['brand', 'Brand', 'product:brand', 'object']
     for key in metadata.keys():
         for trigger in key_trigger:
             if key == trigger:
+                if trigger == 'object' and type(metadata.get(trigger)) == dict:
+                    return clean_string(metadata.get(trigger).get('brand').get('name'))
                 if type(metadata.get(trigger)) == dict:
                     return clean_string(metadata.get(trigger).get('name'))
                 else:
                     return clean_string(metadata.get(trigger))
     if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    return clean_string(metadata['offers'].get(trigger))
+        if metadata['offers']:
+            for key in metadata['offers']:
+                for trigger in key_trigger:
+                    if key == trigger:
+                        return clean_string(metadata['offers'].get(trigger))
     return None
 
 def get_category(metadata):
@@ -150,46 +159,67 @@ def get_currency(metadata):
     if metadata.get('offers') is not None:
         if type(metadata.get('offers')) == dict:
             return metadata.get('offers').get('priceCurrency')
-        elif type(metadata.get('offers')) == list:
-            return metadata.get('offers')[0].get('priceCurrency')
+        elif type(metadata.get('offers')) == list and len(metadata.get('offers')) > 0:
+            if type(metadata.get('offers')[0]) == list and len(metadata.get('offers')[0]) > 0:
+                return metadata.get('offers')[0][0].get('priceCurrency')
+            else:
+                if isinstance(metadata.get('offers')[0], dict):
+                    return metadata.get('offers')[0].get('priceCurrency')
+
     key_trigger = ['priceCurrency', 'product:price:currency']
     for key in metadata.keys():
         for trigger in key_trigger:
             if key == trigger:
                 return metadata.get(trigger)
     if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    return metadata['offers'].get(trigger)
+        if metadata['offers']:
+            for key in metadata['offers']:
+                for trigger in key_trigger:
+                    if key == trigger:
+                        return metadata['offers'].get(trigger)
 
 
 def get_price(metadata):
     if metadata.get('offers') is not None:
         if type(metadata.get('offers')) == dict:
-            priceCurrency = metadata.get('offers').get('priceCurrency')
+            priceCurrency = metadata.get('offers')
+            if isinstance(priceCurrency, dict):
+                priceCurrency = priceCurrency.get('priceCurrency')
             if priceCurrency is not None:
                 res = metadata.get('offers').get('price')
-                return clean_price(res)
-        elif type(metadata.get('offers')) == list:
-            priceCurrency = metadata.get('offers')[0].get('priceCurrency')
-            if priceCurrency is not None:
-                res = metadata.get('offers')[0].get('price')
-                return clean_price(res)
+                return clean_price(str(res))
+        elif type(metadata.get('offers')) == list and len(metadata.get('offers')) > 0:
+            if type(metadata.get('offers')[0]) == list and len(metadata.get('offers')[0]) > 0:
+                priceCurrency = metadata.get('offers')[0][0].get('priceCurrency')
+                if priceCurrency is not None:
+                    res = metadata.get('offers')[0][0].get('price')
+                    return clean_price(str(res))
+            else:
+                priceCurrency = metadata.get('offers')[0]
+                if isinstance(priceCurrency, dict):
+                    priceCurrency = priceCurrency.get('priceCurrency')
+                if priceCurrency is not None:
+                    res = metadata.get('offers')[0]
+                    if isinstance(res, dict):
+                        res = res.get('price')
+                    return clean_price(str(res))
+
     key_trigger = ['price', 'product:price:amount', 'product:price']
     for key in metadata.keys():
         for trigger in key_trigger:
             if key == trigger:
                 res = metadata.get(trigger)
-                return clean_price(res)
+                return clean_price(str(res))
     if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    res = metadata['offers'].get(trigger)
-                    return clean_price(res)
+        if metadata['offers']:
+            for key in metadata['offers']:
+                for trigger in key_trigger:
+                    if key == trigger:
+                        res = metadata['offers'].get(trigger)
+                        return clean_price(str(res))
 
 
+# TODO: Add low and high price as fallback in case of no regular price
 def get_lowPrice(metadata):
     if metadata.get('offers') is not None:
         if type(metadata.get('offers')) == dict:
@@ -340,32 +370,59 @@ def get_additional_data(html_content):
 
 def scrape_metadata(schema, metadata, target):
     metadata_container = metadata[schema]
+
     if len(metadata_container) > 0:
+
+        # handling grouped products (bundles)
+        if type(metadata_container[0]) == dict:
+            if "ProductGroup" in metadata_container[0].values() and "hasVariant" in metadata_container[0]:
+                metadata_container = metadata_container[0].get("hasVariant")
+        elif type(metadata_container[0][0]) == dict:
+            if "ProductGroup" in metadata_container[0][0].values() and "hasVariant" in metadata_container[0][0]:
+                metadata_container = metadata_container[0][0].get("hasVariant")
+            metadata_container = metadata_container[0]
+
         if len(metadata_container) > 1:
             for datablock in metadata_container:
-                if (type(datablock) == list) and ('@graph' in datablock[0].keys()):
+                if (type(datablock) == list) and (len(datablock) > 0) and ('@graph' in datablock[0].keys()):
                     datablock = datablock[0].get('@graph')
                 elif (type(datablock) == dict) and ('@graph' in datablock.keys()):
                     datablock = datablock.get('@graph')
-                if type(datablock) == list:
+                if (type(datablock) == list) and (len(datablock) > 0):
                     datablock = datablock[0]
-                    if datablock['@type'] == target:
-                        result_metadata = {
-                            'product_title': get_title(datablock),
-                            'product_description': get_description(datablock),
-                            'brand': get_brand(datablock),
-                            'price': get_price(datablock),
-                            'currency': get_currency(datablock)
-                        }
-                        return result_metadata
-        if (type(metadata_container) == list) and ('@graph' in metadata_container[0].keys()):
-            metadata_container = metadata_container[0].get('@graph')
-        elif (type(metadata_container) == dict) and ('@graph' in metadata_container.keys()):
-            metadata_container = metadata_container.get('@graph')
+                    if '@type' in datablock:
+                        if target in datablock['@type']:
+                            result_metadata = {
+                                'product_title': get_title(datablock),
+                                'product_description': get_description(datablock),
+                                'brand': get_brand(datablock),
+                                'price': get_price(datablock),
+                                'currency': get_currency(datablock)
+                            }
+                            return result_metadata
+
         for entry in metadata_container:
             if entry is not None:
                 if '@type' in entry:
-                    if entry['@type'] == target:
+                    if target in entry['@type']:
+                        result_metadata = {
+                            'product_title': get_title(entry),
+                            'product_description': get_description(entry),
+                            'brand': get_brand(entry),
+                            'price': get_price(entry),
+                            'currency': get_currency(entry)
+                        }
+                        return result_metadata
+
+        if (type(metadata_container) == list) and (type(metadata_container[0]) == dict) and ('@graph' in metadata_container[0].keys()):
+            metadata_container = metadata_container[0].get('@graph')
+        elif (type(metadata_container) == dict) and ('@graph' in metadata_container.keys()):
+            metadata_container = metadata_container.get('@graph')
+
+        for entry in metadata_container:
+            if entry is not None:
+                if '@type' in entry:
+                    if target in entry['@type']:
                         result_metadata = {
                             'product_title': get_title(entry),
                             'product_description': get_description(entry),
@@ -378,7 +435,7 @@ def scrape_metadata(schema, metadata, target):
 
 def get_metadata(domain, url, metadata):
     schemas = ['opengraph', 'microdata', 'json-ld']
-    schema_types = ['product', 'offer', 'Product', 'Book']
+    schema_types = ['product', 'offer', 'Product', 'Book', 'product.item', 'BuyAction']
 
     result_metadata = {
         'domain': domain,
