@@ -5,6 +5,7 @@ import time
 import random
 import langid
 import asyncio
+import settings
 from technologies import get_technology
 from download_crawl import download_all
 from extraction import get_markups, get_metadata, get_additional_data, get_external_links
@@ -57,7 +58,7 @@ def parse_header(header_str):
     return header_dict
 
 
-def crawl_common_crawl(url_list, index_list, query_year, limit=0):
+def crawl_common_crawl(url_list, index_list, query_year):
 
     print('[*] Started to crawl %d domains from %d indices' % (len(url_list), len(index_list)))
 
@@ -78,28 +79,22 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
         record_count = len(record_list)
 
         random.shuffle(record_list)
-        #if limit > 0:
-        #    record_list = record_list[:limit]
         link_list = []
         target = len(record_list)
         page_counter = 0
         product_counter = 0
 
-        # TODO: create settings with cool defaults
-        # TODO: create sliding window and rules as break criteria
         # TODO: make a cleaning of currencies and prices
         # TODO: regex and NER for brands and tagging
-        batch_size = 50
+        batch_size = settings.BATCH_SIZE
 
         # technology lookup for dom is expensive and stops earlier
-        # TODO: move limit for counter into settings
         dom_enabled = True
-        dom_limit = 5
+        dom_limit = settings.DOM_LIMIT
         dom_change_counter = 0
+        early_break = False
 
-        while page_counter <= len(record_list) and page_counter <= 1000 and product_counter <= 100:
-            #for c in range(0, len(record_list), batch_size):
-                #batch = record_list[c:c + batch_size]
+        while page_counter <= len(record_list) and page_counter <= settings.MAX_PAGES and product_counter <= settings.MAX_PRODUCTS and not early_break:
             batch = record_list[page_counter:page_counter + batch_size]
             dump = asyncio.run(download_all(batch))
             for record in dump:
@@ -110,7 +105,6 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                     # storing count of technologies found to compare
                     previous_count = len(detected_technology)
 
-                    #TODO: detected technology should return category too
                     detected_technology.update(get_technology(url, html_content, parse_header(header), dom_enabled))
                     print(f'[*] {len(detected_technology)} technologies for {url} detected, DOM: {dom_enabled}')
 
@@ -212,6 +206,9 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
                 progress = (page_counter / target * 100) if target else 0
                 print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
 
+            # checking success and set early break if needed because not any product was found
+            if page_counter >= settings.MAX_PRODUCTS and product_counter == 0:
+                early_break = True
 
         ### Detected Products of Shop
         count_schema = 0
@@ -300,7 +297,7 @@ def crawl_common_crawl(url_list, index_list, query_year, limit=0):
             'domain': [url],
             'archive_year': [query_year],
             'record_count_unique': [record_count],
-            'record_count_checked': [len(record_list)],
+            'record_count_checked': [page_counter],
             'product_count_schema': [count_schema],
             'product_count_pattern': [count_patterns],
             'last_update': [update_date]

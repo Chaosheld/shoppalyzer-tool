@@ -9,10 +9,10 @@ from bs4 import BeautifulSoup
 
 
 def detect_encoding(data_bytes):
-    """Erkennt die beste Zeichenkodierung für HTML-Seiten."""
+    """Detects the best character encoding for HTML pages."""
     detected_encoding = chardet.detect(data_bytes)["encoding"] or "ISO-8859-1"
 
-    # Prüfe, ob das HTML selbst eine Kodierung vorgibt (aus <meta charset>)
+    # check with bs4 if HTML itself defines encoding (from <meta charset>)
     try:
         soup = BeautifulSoup(data_bytes, "html.parser")
         meta_tag = soup.find("meta", charset=True) or soup.find("meta", attrs={"http-equiv": "Content-Type"})
@@ -22,7 +22,7 @@ def detect_encoding(data_bytes):
             elif "charset=" in meta_tag.get("content", ""):
                 detected_encoding = meta_tag["content"].split("charset=")[-1].strip()
     except Exception:
-        pass  # Falls BeautifulSoup fehlschlägt, ignorieren
+        pass
 
     return detected_encoding
 

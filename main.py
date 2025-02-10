@@ -60,14 +60,14 @@ if __name__ == "__main__":
                     index_list = prepare_query(query_year)
                 if len(index_list) == 0:
                     index_list = prepare_query(query_year)
-                # TODO: Limit dynamisch/regelbasiert und Live Crawl kombinieren
                 try:
-                    crawl_index.crawl_common_crawl(url_list, index_list, query_year, limit=500)
+                    crawl_index.crawl_common_crawl(url_list, index_list, query_year)
                     url_text = "\n".join(url_list)
                     subject = f'Shoppalyzer finished a task with {len(url_list)} URLs successfully!'
                     body = f"""The task for Shoppalyzer with {len(url_list)} URLs for {query_year} is done and  data is ready to be processed.
-                    \nThe following URLs have been checked:
-                    \n{url_text}
+                    The following URLs have been checked:
+                    
+                    {url_text}
                     """
                     #notification.send_email(subject, body)
                 except Exception as e:
