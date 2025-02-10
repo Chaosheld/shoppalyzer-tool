@@ -6,6 +6,7 @@ import random
 import langid
 import asyncio
 import settings
+from src.patterns import link_exclusions
 from technologies import get_technology
 from download_crawl import download_all
 from extraction import get_markups, get_metadata, get_additional_data, get_external_links
@@ -18,8 +19,7 @@ def query_pq(url, index_list, database_index=r"./cc.parquet"):
     df = pd.read_parquet(database_index, engine='fastparquet')
     df = df[(df['domain'] == url) & (df['crawl'].isin(bucket))]
     df = df.drop_duplicates(subset=['domain', 'url_path'], keep='last')
-    # TODO: could be extended by more invalid types/documents
-    df = df[~df['url_path'].str.endswith(('.pdf', '.docx', '.csv', '.xlsx'), na=False)]
+    df = df[~df['url_path'].str.endswith(tuple(link_exclusions), na=False)]
     record_list = df.to_dict(orient='records')
     print('[*] %d unique entries found for %s' % (len(df), url))
 
@@ -84,8 +84,6 @@ def crawl_common_crawl(url_list, index_list, query_year):
         page_counter = 0
         product_counter = 0
 
-        # TODO: make a cleaning of currencies and prices
-        # TODO: regex and NER for brands and tagging
         batch_size = settings.BATCH_SIZE
 
         # technology lookup for dom is expensive and stops earlier

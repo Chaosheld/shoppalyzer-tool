@@ -1,3 +1,12 @@
+link_exclusions = {
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp', '.rtf', '.txt', '.csv',
+    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg', '.mp3', '.wav', '.ogg', '.flac', '.mp4', '.mkv', '.avi', '.mov', '.wmv',
+    '.stl', '.obj', '.fbx', '.skp', '.gsm', '.rfa', '.dwg', '.dxf', '.blend', '.step', '.iges', '.3ds', '.gltf', '.glb',
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso', '.dmg', '.pkg', '.deb', '.rpm', '.appimage',
+    '.exe', '.msi', '.sh', '.bat', '.cmd', '.ps1', '.apk', '.bin', '.run', '.jar', '.war',
+    '.js', '.css', '.json', '.xml', '.yaml', '.yml', '.py', '.java', '.cpp', '.h', '.c', '.php', '.cs', '.swift', '.go', '.rb', '.pl'
+}
+
 patterns_product_pages = [
     # obvious product pages with language variants
     '/product/',
