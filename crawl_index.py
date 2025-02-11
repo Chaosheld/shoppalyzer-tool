@@ -90,74 +90,44 @@ def crawl_common_crawl(url_list, index_list, query_year):
         dom_enabled = True
         dom_limit = settings.DOM_LIMIT
         dom_change_counter = 0
-        early_break = False
+
+        early_break = target <= 0
 
         while page_counter <= len(record_list) and page_counter <= settings.MAX_PAGES and product_counter <= settings.MAX_PRODUCTS and not early_break:
-            batch = record_list[page_counter:page_counter + batch_size]
-            dump = asyncio.run(download_all(batch))
-            for record in dump:
-                if record is not None:
-                    html_content = record['response']
-                    header = record['header']
+            batch_size_actual = min(batch_size, len(record_list) - page_counter)
+            batch = record_list[page_counter:page_counter + batch_size_actual]
+            if len(batch) > 0:
+                dump = asyncio.run(download_all(batch))
+                for record in dump:
+                    if record is not None:
+                        html_content = record['response']
+                        header = record['header']
 
-                    # storing count of technologies found to compare
-                    previous_count = len(detected_technology)
+                        # storing count of technologies found to compare
+                        previous_count = len(detected_technology)
 
-                    detected_technology.update(get_technology(url, html_content, parse_header(header), dom_enabled))
-                    print(f'[*] {len(detected_technology)} technologies for {url} detected, DOM: {dom_enabled}')
+                        detected_technology.update(get_technology(url, html_content, parse_header(header), dom_enabled))
+                        print(f'[*] {len(detected_technology)} technologies for {url} detected, DOM: {dom_enabled}')
 
-                    # checking if new technology was found
-                    if len(detected_technology) > previous_count:
-                        dom_change_counter = 0
-                        dom_enabled = True  # reactivating dom search
-                    else:
-                        dom_change_counter += 1  # no new technology found
-                        if dom_change_counter > dom_limit:
-                            dom_enabled = False  # deactivating dom search
+                        # checking if new technology was found
+                        if len(detected_technology) > previous_count:
+                            dom_change_counter = 0
+                            dom_enabled = True  # reactivating dom search
+                        else:
+                            dom_change_counter += 1  # no new technology found
+                            if dom_change_counter > dom_limit:
+                                dom_enabled = False  # deactivating dom search
 
-                    if html_content:
-                        metadata = get_markups(html_content)
-                        corpus_data = get_metadata(url, record['url_path'], metadata)
+                        if html_content:
+                            metadata = get_markups(html_content)
+                            corpus_data = get_metadata(url, record['url_path'], metadata)
 
-                        # if valid schema found, store results, else test if patterns might work
-                        product_schema = False
+                            # if valid schema found, store results, else test if patterns might work
+                            product_schema = False
 
-                        # check retrieved schemas from source code
-                        if check_nones(corpus_data, 3):
-                            # now that there is useful metadata we can add page title, description and lang code
-                            additional_data = get_additional_data(html_content)
-                            for key in additional_data:
-                                corpus_data[key] = additional_data[key]
-                            corpus_data['archive_year'] = query_year
-                            corpus_data['last_update'] = update_date
-
-                            # building string for later translation/classification task
-                            title = str(corpus_data.get('product_title', '')).strip()
-                            description = str(corpus_data.get('product_description', '')).strip()
-
-                            invalid_values = {None, 'none', 'null', 'undefined', ''}
-
-                            if title not in invalid_values:
-                                if description not in invalid_values:
-                                    product_string = title + '. ' + description
-                                else:
-                                    product_string = description
-                            else:
-                                product_string = description
-
-                            if product_string is not None and len(product_string) > 0:
-                                detected_lang = langid.classify(product_string)[0]
-                                corpus_data['detected_language'] = detected_lang
-                                product_schema = True
-                                corpus_data['product_schema'] = product_schema
-
-                                print(f'[*] Found product for {url} with schema: {title}')
-                                product_counter += 1
-                                product_list.append(corpus_data)
-
-                        # starting pattern search
-                        if not product_schema:
-                            if identify_product(record['url_path']):
+                            # check retrieved schemas from source code
+                            if check_nones(corpus_data, 3):
+                                # now that there is useful metadata we can add page title, description and lang code
                                 additional_data = get_additional_data(html_content)
                                 for key in additional_data:
                                     corpus_data[key] = additional_data[key]
@@ -165,8 +135,8 @@ def crawl_common_crawl(url_list, index_list, query_year):
                                 corpus_data['last_update'] = update_date
 
                                 # building string for later translation/classification task
-                                title = str(corpus_data.get('page_title', '')).strip()
-                                description = str(corpus_data.get('page_description', '')).strip()
+                                title = str(corpus_data.get('product_title', '')).strip()
+                                description = str(corpus_data.get('product_description', '')).strip()
 
                                 invalid_values = {None, 'none', 'null', 'undefined', ''}
 
@@ -181,31 +151,71 @@ def crawl_common_crawl(url_list, index_list, query_year):
                                 if product_string is not None and len(product_string) > 0:
                                     detected_lang = langid.classify(product_string)[0]
                                     corpus_data['detected_language'] = detected_lang
-
-                                    corpus_data['product_title'] = title
-                                    corpus_data['product_description'] = description
+                                    product_schema = True
                                     corpus_data['product_schema'] = product_schema
 
-                                    currency = get_currency_from_html(html_content)
-                                    price = get_price_from_html(html_content)
-                                    if currency and price:
-                                        corpus_data['price'] = price
-                                        corpus_data['currency'] = currency
-
-                                    print(f'[*] Found product for {url} with patterns: {title}')
+                                    print(f'[*] Found product for {url} with schema: {title}')
                                     product_counter += 1
                                     product_list.append(corpus_data)
 
+                            # starting pattern search
+                            if not product_schema:
+                                if identify_product(record['url_path']):
+                                    additional_data = get_additional_data(html_content)
+                                    for key in additional_data:
+                                        corpus_data[key] = additional_data[key]
+                                    corpus_data['archive_year'] = query_year
+                                    corpus_data['last_update'] = update_date
 
-                        link_list = extract_external_links(url, html_content, link_list)
+                                    # building string for later translation/classification task
+                                    title = str(corpus_data.get('page_title', '')).strip()
+                                    description = str(corpus_data.get('page_description', '')).strip()
 
-                # some tracking
-                page_counter += 1
-                progress = (page_counter / target * 100) if target else 0
-                print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
+                                    invalid_values = {None, 'none', 'null', 'undefined', ''}
+
+                                    if title not in invalid_values:
+                                        if description not in invalid_values:
+                                            product_string = title + '. ' + description
+                                        else:
+                                            product_string = description
+                                    else:
+                                        product_string = description
+
+                                    if product_string is not None and len(product_string) > 0:
+                                        detected_lang = langid.classify(product_string)[0]
+                                        corpus_data['detected_language'] = detected_lang
+
+                                        corpus_data['product_title'] = title
+                                        corpus_data['product_description'] = description
+                                        corpus_data['product_schema'] = product_schema
+
+                                        currency = get_currency_from_html(html_content)
+                                        price = get_price_from_html(html_content)
+                                        if currency and price:
+                                            corpus_data['price'] = price
+                                            corpus_data['currency'] = currency
+
+                                        print(f'[*] Found product for {url} with patterns: {title}')
+                                        product_counter += 1
+                                        product_list.append(corpus_data)
+
+
+                            link_list = extract_external_links(url, html_content, link_list)
+
+                    # some tracking
+                    page_counter += 1
+                    progress = (page_counter / target * 100) if target else 0
+                    print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
 
             # checking success and set early break if needed because not any product was found
             if page_counter >= settings.MAX_PRODUCTS and product_counter == 0:
+                early_break = True
+
+            if page_counter >= settings.RELEVANCE_CHECK and (product_counter/page_counter * 100) < settings.RELEVANCE_THRESHOLD:
+                early_break = True
+
+            # checking if there are no records left
+            if len(batch) == 0:
                 early_break = True
 
         ### Detected Products of Shop
