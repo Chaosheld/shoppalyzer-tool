@@ -36,25 +36,24 @@ def store_index_pq(result_df, database_index=r"./cc.parquet"):
 
 
 def query_athena(list_of_urls, index_list):
-    for index_value in index_list:
-        list_string = f"'{list_of_urls[0]}'"
-        for i in range(1, len(list_of_urls)):
-            list_string += f", '{list_of_urls[i]}'"
+    # creating single strings from lists
+    list_string = ", ".join(f"'{url}'" for url in list_of_urls)
+    index_string = ", ".join(f"'CC-MAIN-{index_value}'" for index_value in index_list)
 
-        # building the actual query to AWS Athena
-        fields = "url_host_registered_domain As domain, url_path, warc_filename, warc_record_offset, warc_record_length"
-        table = '"ccindex"."ccindex"'
-        conditions = f"crawl = 'CC-MAIN-{index_value}' AND subset = 'warc' AND url_host_registered_domain IN ({list_string})"
+    # running SQL query in single scan across all index values
+    fields = "url_host_registered_domain AS domain, url_path, warc_filename, warc_record_offset, warc_record_length, crawl"
+    table = '"ccindex"."ccindex"'
+    conditions = f"crawl IN ({index_string}) AND subset = 'warc' AND url_host_registered_domain IN ({list_string})"
 
-        sql = (f"SELECT {fields} "
-               f"FROM {table} "
-               f"WHERE {conditions};")
+    sql = (f"SELECT {fields} "
+           f"FROM {table} "
+           f"WHERE {conditions};")
 
-        print(sql)
+    print(sql)  # Debugging
 
-        # run query and store results in pandas df
-        athena_conn.execute(sql)
-        df = as_pandas(athena_conn)
-        print(f"Athena connected and querying 'CC-MAIN-{index_value}.")
-        df["crawl"] = f"CC-MAIN-{index_value}"
-        store_index_pq(df)
+    # executing query and store to pandas df
+    df = as_pandas(athena_conn.execute(sql))
+    print(f"Athena query for {len(list_of_urls)} done.")
+
+    store_index_pq(df)
+    print(f"Query result with {len(df)} rows stored in parquet file.")
