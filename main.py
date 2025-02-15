@@ -69,7 +69,7 @@ if __name__ == "__main__":
                     
                     {url_text}
                     """
-                    #notification.send_email(subject, body)
+                    notification.send_email(subject, body)
                 except Exception as e:
                     error_message = traceback.format_exc()
                     subject = f'Shoppalyzer has encountered an issue that needs your attention'
@@ -77,7 +77,7 @@ if __name__ == "__main__":
                     
                     {traceback.format_exc()}
                     """
-                    #notification.send_email(subject, body)
+                    notification.send_email(subject, body)
                     raise Exception
 
             else:
