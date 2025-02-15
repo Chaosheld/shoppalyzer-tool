@@ -33,7 +33,7 @@ def get_external_links(domain, link_list):
     dict = {}
     for link in link_list:
         res = urlparse(link).netloc
-        res = re.sub("^ww*.\.", "", res)
+        res = re.sub(r"^ww*.\.", "", res)
         if res != domain:
             if res in dict.keys():
                 dict[res] += 1
@@ -266,14 +266,14 @@ def get_highPrice(metadata):
 
 
 def extract_follow_links(link_list):
-    facebook_pattern = '([^developers]|[^docs]).facebook\.com(?!\/share|\/ads\/|\/legal\/|\/about\/|\/groups\/|\/policy\.php|\/business\/|\/settings\?)'
-    twitter_pattern = 'twitter\.com(?!(\/share|\/intent|\/personalization|(\/)(home)(\/)*(\?)))'
-    instagram_pattern = '([^help]).instagram\.com(?!\/share\/|\/about\/|\/explore\/|\/p\/|\/tv\/|\/vp\/|\/oauth)'
-    youtube_pattern = '(.*(youtube\.com(\/.*?){1,2})(\/|$))|(.*(youtube\.com\/.*?)(\/|$))'
-    tiktok_pattern = 'tiktok\.com\/@'
+    facebook_pattern = r'^(?!.*(developers|docs))facebook\.com(?!\/(share|ads|legal|about|groups|policy\.php|business|settings))'
+    twitter_pattern = r'twitter\.com(?!\/(share|intent|personalization|home\/?\?))'
+    instagram_pattern = r'^(?!.*help)instagram\.com(?!\/(share|about|explore|p|tv|vp|oauth))'
+    youtube_pattern = r'(?:https?:\/\/)?(?:www\.)?(youtube\.com\/(?:[^\/]+\/?){1,2}))'
+    tiktok_pattern = r'tiktok\.com\/@'
 
-    playstore_pattern = 'play\.google\.com'
-    appstore_pattern = 'itunes\.apple\.com'
+    playstore_pattern = r'play\.google\.com'
+    appstore_pattern = r'itunes\.apple\.com'
 
     # list storing tuples to return as result
     res_list = []
