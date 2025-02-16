@@ -65,3 +65,4 @@ frozenlist>=1.4.1
 aiohappyeyeballs>=2.4.2
 chardet>=5.2.0
 tzdata>=2024.1
+duckdb>=1.2.0

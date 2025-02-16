@@ -1,59 +1,128 @@
-import pyathena
 import credentials
-import pandas as pd
-from pyathena.pandas.util import as_pandas
+import duckdb
 import os.path
+import boto3
+import time
 
-athena_conn = pyathena.connect(
+
+s3_client = boto3.client(
+    "s3",
     aws_access_key_id=credentials.AWS_KEY,
     aws_secret_access_key=credentials.AWS_SECRET,
-    s3_staging_dir=credentials.AWS_BUCKET,
-    region_name=credentials.AWS_REGION).cursor()
+    region_name=credentials.AWS_REGION,
+)
+
+athena_client = boto3.client(
+    "athena",
+    aws_access_key_id=credentials.AWS_KEY,
+    aws_secret_access_key=credentials.AWS_SECRET,
+    region_name="us-east-1"
+)
+
+def query_athena(list_of_urls, index_list, database_index="./cc.parquet"):
+    print(f"🚀 Running Athena queries...")
+
+    for index_value in index_list:
+        list_string = f"'{list_of_urls[0]}'"
+        for i in range(1, len(list_of_urls)):
+            list_string += f", '{list_of_urls[i]}'"
+
+        # building the actual query to AWS Athena
+        fields = f"url_host_registered_domain AS domain, crawl, url_path, warc_filename, warc_record_offset, warc_record_length"
+        table = '"ccindex"."ccindex"'
+        conditions = f"crawl = 'CC-MAIN-{index_value}' AND subset = 'warc' AND url_host_registered_domain IN ({list_string})"
+
+        sql = (f"SELECT {fields} "
+               f"FROM {table} "
+               f"WHERE {conditions};")
+
+        s3_bucket = credentials.AWS_BUCKET.replace("s3://", "").strip("/")
+        s3_prefix = "cc_index_results"
+
+        print(f"Athena connected and querying 'CC-MAIN-{index_value}.")
+        s3_path = run_athena_query(sql, s3_bucket, s3_prefix)
+
+        # storing Athena result from S3 in local Parquet
+        store_index_pq(database_index, s3_path)
+
+    print(f"📈💯 All queries are done. Happy crawling!")
 
 
-def store_index_pq(result_df, database_index=r"./cc.parquet"):
-    # for every domain in df replace the set of found index records for given index block
-    print(result_df)
-    print(result_df.columns)
+def run_athena_query(sql, s3_bucket, s3_prefix):
+    """
+    Executes an Athena query and waits for it to be completed.
+    Returns the S3 path to the result file.
+    """
+    # execute query and get the execution id
+    response = athena_client.start_query_execution(
+        QueryString=sql,
+        QueryExecutionContext={"Database": "ccindex"},
+        ResultConfiguration={"OutputLocation": f"s3://{s3_bucket}/{s3_prefix}/"},
+    )
 
-    # Create an empty DataFrame with columns
+    query_execution_id = response["QueryExecutionId"]
+    print(f"🚀 Athena Query gestartet: {query_execution_id}")
+
+    # waiting for query to finish
+    while True:
+        query_status = athena_client.get_query_execution(QueryExecutionId=query_execution_id)
+        status = query_status["QueryExecution"]["Status"]["State"]
+
+        if status in ["SUCCEEDED", "FAILED", "CANCELLED"]:
+            break
+
+        print("Athena query still running, waiting for 5 seconds...")
+        time.sleep(5)
+
+    if status != "SUCCEEDED":
+        raise ValueError(f"Athena query failed: {status}")
+
+    print(f"Athena query successfully completed: {query_execution_id}")
+
+    s3_result_path = f"s3://{s3_bucket}/{s3_prefix}/{query_execution_id}.csv"
+    print(f"Result is available under: {s3_result_path}")
+
+    return s3_result_path
+
+
+def store_index_pq(database_index, s3_path):
+    """
+    Gets the latest Athena result file from S3 (CSV) and stores the content in Parquet using DuckDB.
+    """
+    count_query = f"SELECT COUNT(*) FROM read_parquet('{database_index}')"
+
+    # configuring access to S3 for DuckDB
+    duckdb.execute(f"""
+        SET s3_region='{credentials.AWS_REGION}';
+        SET s3_access_key_id='{credentials.AWS_KEY}';
+        SET s3_secret_access_key='{credentials.AWS_SECRET}';
+    """)
+
+    df = duckdb.read_csv(s3_path)
+    print(f"Access to S3 successful! {len(df)} rows loaded.")
+
+    # in case no Parquet file exists
     if not os.path.isfile(database_index):
-        columns = ['domain', 'crawl', 'url_path', 'warc_filename', 'warc_record_offset', 'warc_record_length']
-        df_empty = pd.DataFrame(columns=columns)
-        # Save the empty DataFrame with columns to a Parquet file
-        df_empty.to_parquet(database_index)
+        duckdb.execute(f"COPY df TO '{database_index}' (FORMAT PARQUET)")
+        row_count = duckdb.query(count_query).fetchone()[0]
+        print(f"New Parquet file created: {database_index} with {row_count} rows")
 
-    # add index addresses to DB
-    index_df = pd.read_parquet(database_index, engine='fastparquet')
-    index_df = pd.concat([index_df, result_df], ignore_index=True)
-    index_df = index_df.drop_duplicates(keep="last")
-    index_df = index_df.reset_index(drop=True)
+    # else upsert using UNION statement
+    else:
+        row_count = duckdb.query(count_query).fetchone()[0]
+        # loading already existing data to temp table
+        duckdb.execute(f"CREATE OR REPLACE TEMP TABLE existing_data AS SELECT * FROM read_parquet('{database_index}')")
 
-    print(index_df.head())
-    print(index_df.tail())
+        # loading new csv data to temp table
+        duckdb.execute("CREATE OR REPLACE TEMP TABLE new_data AS SELECT domain, crawl, url_path, warc_filename, warc_record_offset, warc_record_length FROM df")
 
-    index_df.to_parquet(database_index, index=False)
+        duckdb.execute(f"""
+                    COPY (
+                        SELECT * FROM existing_data
+                        UNION 
+                        SELECT * FROM new_data
+                    ) TO '{database_index}' (FORMAT PARQUET)
+                """)
 
-
-def query_athena(list_of_urls, index_list):
-    # creating single strings from lists
-    list_string = ", ".join(f"'{url}'" for url in list_of_urls)
-    index_string = ", ".join(f"'CC-MAIN-{index_value}'" for index_value in index_list)
-
-    # running SQL query in single scan across all index values
-    fields = "url_host_registered_domain AS domain, url_path, warc_filename, warc_record_offset, warc_record_length, crawl"
-    table = '"ccindex"."ccindex"'
-    conditions = f"crawl IN ({index_string}) AND subset = 'warc' AND url_host_registered_domain IN ({list_string})"
-
-    sql = (f"SELECT {fields} "
-           f"FROM {table} "
-           f"WHERE {conditions};")
-
-    print(sql)  # Debugging
-
-    # executing query and store to pandas df
-    df = as_pandas(athena_conn.execute(sql))
-    print(f"Athena query for {len(list_of_urls)} done.")
-
-    store_index_pq(df)
-    print(f"Query result with {len(df)} rows stored in parquet file.")
+        row_count_updated = duckdb.query(count_query).fetchone()[0] - row_count
+        print(f"Parquet file updated: {row_count_updated} rows added.")

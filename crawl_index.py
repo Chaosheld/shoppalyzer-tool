@@ -6,6 +6,7 @@ import random
 import langid
 import asyncio
 import settings
+import duckdb
 from src.patterns import link_exclusions
 from technologies import get_technology
 from download_crawl import download_all
@@ -14,10 +15,10 @@ from extraction import extract_external_links, extract_follow_links
 from extraction import identify_product, get_price_from_html, get_currency_from_html
 
 
-def query_pq(url, index_list, database_index=r"./cc.parquet"):
-    bucket = ["CC-MAIN-" + str(index) for index in index_list]
-    df = pd.read_parquet(database_index, engine='fastparquet')
-    df = df[(df['domain'] == url) & (df['crawl'].isin(bucket))]
+def duck_query_pq(url, index_list, database_index=r"./cc.parquet"):
+    bucket_string = ", ".join(f"'CC-MAIN-{index_value}'" for index_value in index_list)
+    query = f"SELECT * FROM read_parquet('{database_index}') WHERE domain = '{url}' and crawl in ({bucket_string})"
+    df = duckdb.query(query).to_df()
     df = df.drop_duplicates(subset=['domain', 'url_path'], keep='last')
     df = df[~df['url_path'].str.endswith(tuple(link_exclusions), na=False)]
     record_list = df.to_dict(orient='records')
@@ -75,7 +76,7 @@ def crawl_common_crawl(url_list, index_list, query_year):
         detected_technology = {}
 
         # getting all queried records from Common Crawl
-        record_list = query_pq(url, index_list)
+        record_list = duck_query_pq(url, index_list)
         record_count = len(record_list)
 
         random.shuffle(record_list)
