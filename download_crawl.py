@@ -42,8 +42,10 @@ async def download_crawl(record, session):
     headers = {
         "Range": f'bytes={int(record["warc_record_offset"])}-{int(record["warc_record_offset"]) + int(record["warc_record_length"])}'}
 
+    timeout = aiohttp.ClientTimeout(total=60)
+
     while count_retries < max_retries:
-        async with session.get(data_url, headers=headers) as r:
+        async with session.get(data_url, headers=headers, timeout=timeout) as r:
             r_status = r.status
             if r_status == 206: # 206 means that the request has succeeded and the body contains the requested ranges of
                 # data, as described in the Range header of the request
@@ -98,7 +100,7 @@ async def download_crawl(record, session):
 
 async def download_all(records):
     result = []
-    sem = asyncio.Semaphore(8)
+    sem = asyncio.Semaphore(4)
     async with aiohttp.ClientSession() as session:
         tasks = [
             asyncio.ensure_future(safe_download(record, session, sem))

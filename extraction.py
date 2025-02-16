@@ -269,7 +269,7 @@ def extract_follow_links(link_list):
     facebook_pattern = r'^(?!.*(developers|docs))facebook\.com(?!\/(share|ads|legal|about|groups|policy\.php|business|settings))'
     twitter_pattern = r'twitter\.com(?!\/(share|intent|personalization|home\/?\?))'
     instagram_pattern = r'^(?!.*help)instagram\.com(?!\/(share|about|explore|p|tv|vp|oauth))'
-    youtube_pattern = r'(?:https?:\/\/)?(?:www\.)?(youtube\.com\/(?:[^\/]+\/?){1,2}))'
+    youtube_pattern = r'(?:https?://)?(?:www\.)?(youtube\.com/(?:[^/\s]+/?)*)'
     tiktok_pattern = r'tiktok\.com\/@'
 
     playstore_pattern = r'play\.google\.com'
