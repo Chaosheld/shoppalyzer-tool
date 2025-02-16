@@ -308,8 +308,7 @@ def extract_follow_links(link_list):
                     res_list.append(('instagram', instagram_link))
 
         if bool(re.search(youtube_pattern, str(link))):
-            youtube_link = re.search(r'(.*(youtube\.com\/((user\/.*?)|(channel\/.*?)|(c\/.*?)|.+?))(\/|$|\n|\t|\r))',
-                                     link)
+            youtube_link = re.search(r'(.*(youtube\.com\/((user\/[^/\s]+)|(channel\/[^/\s]+)|(c\/[^/\s]+)|[^/\s]+))(\/|$|\s))', link)
             if youtube_link:
                 youtube_link = re.sub(r'\/$', '', youtube_link.group(0))
                 if youtube_link not in track_list:
