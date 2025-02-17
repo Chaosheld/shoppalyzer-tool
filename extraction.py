@@ -402,7 +402,16 @@ def scrape_metadata(schema, metadata, target):
         for entry in metadata_container:
             if entry is not None:
                 if '@type' in entry:
-                    if target in entry['@type']:
+                    if entry == '@type':
+                        result_metadata = {
+                            'product_title': get_title(metadata_container),
+                            'product_description': get_description(metadata_container),
+                            'brand': get_brand(metadata_container),
+                            'price': get_price(metadata_container),
+                            'currency': get_currency(metadata_container)
+                        }
+                        return result_metadata
+                    elif target in entry['@type']:
                         result_metadata = {
                             'product_title': get_title(entry),
                             'product_description': get_description(entry),
@@ -420,7 +429,16 @@ def scrape_metadata(schema, metadata, target):
         for entry in metadata_container:
             if entry is not None:
                 if '@type' in entry:
-                    if target in entry['@type']:
+                    if entry == '@type':
+                        result_metadata = {
+                            'product_title': get_title(metadata_container),
+                            'product_description': get_description(metadata_container),
+                            'brand': get_brand(metadata_container),
+                            'price': get_price(metadata_container),
+                            'currency': get_currency(metadata_container)
+                        }
+                        return result_metadata
+                    elif target in entry['@type']:
                         result_metadata = {
                             'product_title': get_title(entry),
                             'product_description': get_description(entry),
