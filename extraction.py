@@ -61,13 +61,13 @@ def get_markups(html_data):
     for json_element in soup.find_all('script', type='application/ld+json'):
         try:
             product_script = json.loads(json_element.text)
-            if isinstance(product_script, list):
+            if isinstance(product_script, list) and product_script:
                 product_script = product_script[0]
 
             if "mainEntity" in product_script and isinstance(product_script["mainEntity"], dict):
                 product_script = product_script["mainEntity"]
 
-            if "@type" in product_script:
+            if isinstance(product_script, dict) and "@type" in product_script:
                 types = product_script["@type"]
                 if isinstance(types, list) and "Product" in types or types == "Product":
                     metadata['json-ld'].append(product_script)
