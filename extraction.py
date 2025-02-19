@@ -30,16 +30,20 @@ def extract_external_links(url, html_content, link_list):
 
 
 def get_external_links(domain, link_list):
-    dict = {}
+    link_dict = {}
     for link in link_list:
-        res = urlparse(link).netloc
-        res = re.sub(r"^ww*.\.", "", res)
-        if res != domain:
-            if res in dict.keys():
-                dict[res] += 1
-            else:
-                dict[res] = 1
-    return dict
+        try:
+            res = urlparse(link).netloc
+            res = re.sub(r"^ww*.\.", "", res)
+            if res != domain:
+                if res in link_dict.keys():
+                    link_dict[res] += 1
+                else:
+                    link_dict[res] = 1
+        except ValueError as e:
+            print(f"Value error parsing url '{link}': {e}")
+            continue
+    return link_dict
 
 
 def extract_metadata(html_data):
@@ -49,6 +53,7 @@ def extract_metadata(html_data):
                                          'microdata',
                                          'opengraph'])
     return metadata
+
 
 def get_markups(html_data):
     try:
@@ -128,6 +133,7 @@ def get_brand(metadata):
                     if key == trigger:
                         return clean_string(metadata['offers'].get(trigger))
     return None
+
 
 def get_category(metadata):
     key_trigger = ['category', 'Category']
