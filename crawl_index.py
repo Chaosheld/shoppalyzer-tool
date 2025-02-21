@@ -13,6 +13,7 @@ from download_crawl import download_all
 from extraction import get_markups, get_metadata, get_additional_data, get_external_links
 from extraction import extract_external_links, extract_follow_links
 from extraction import identify_product, get_price_from_html, get_currency_from_html
+from crawl_live import crawl_url
 
 
 def duck_query_pq(url, index_list, database_index=r"./cc.parquet"):
@@ -77,12 +78,14 @@ def crawl_common_crawl(url_list, index_list, query_year):
 
         # getting all queried records from Common Crawl
         record_list = duck_query_pq(url, index_list)
-        record_count = len(record_list)
+        cc_record_count = len(record_list)
+        record_count = cc_record_count
 
         random.shuffle(record_list)
         link_list = []
         target = len(record_list)
-        page_counter = 0
+        cc_page_counter = 0
+        page_counter = cc_page_counter
         product_counter = 0
 
         batch_size = settings.BATCH_SIZE
@@ -93,10 +96,15 @@ def crawl_common_crawl(url_list, index_list, query_year):
         dom_change_counter = 0
 
         early_break = target <= 0
+        booster_needed = False
 
-        while page_counter <= len(record_list) and page_counter <= settings.MAX_PAGES and product_counter <= settings.MAX_PRODUCTS and not early_break:
-            batch_size_actual = min(batch_size, len(record_list) - page_counter)
-            batch = record_list[page_counter:page_counter + batch_size_actual]
+        ########################################
+        #             COMMON CRAWL             #
+        ########################################
+
+        while cc_page_counter <= len(record_list) and cc_page_counter <= settings.MAX_PAGES and product_counter <= settings.MAX_PRODUCTS and not early_break:
+            batch_size_actual = min(batch_size, len(record_list) - cc_page_counter)
+            batch = record_list[cc_page_counter:cc_page_counter + batch_size_actual]
             if len(batch) > 0:
                 dump = asyncio.run(download_all(batch))
                 for record in dump:
@@ -204,20 +212,151 @@ def crawl_common_crawl(url_list, index_list, query_year):
                             link_list = extract_external_links(url, html_content, link_list)
 
                     # some tracking
-                    page_counter += 1
-                    progress = (page_counter / target * 100) if target else 0
-                    print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
+                    cc_page_counter += 1
+                    progress = (cc_page_counter / target * 100) if target else 0
+                    print(f'[*] Found {product_counter} products out of {cc_page_counter} pages at {progress:.2f}% checked.')
 
             # checking success and set early break if needed because not any product was found
-            if page_counter >= settings.MAX_PRODUCTS and product_counter == 0:
+            if cc_page_counter >= settings.MAX_PRODUCTS and product_counter == 0:
                 early_break = True
 
-            if page_counter >= settings.RELEVANCE_CHECK and (product_counter/page_counter * 100) < settings.RELEVANCE_THRESHOLD:
+            if cc_page_counter >= settings.RELEVANCE_CHECK and (product_counter/cc_page_counter * 100) < settings.RELEVANCE_THRESHOLD:
                 early_break = True
 
             # checking if there are no records left
             if len(batch) == 0:
                 early_break = True
+                # enable live crawl
+                booster_needed = True
+
+        ########################################
+        #           LIVE CRAWL BOOST           #
+        ########################################
+
+        # optional live crawl as booster
+        if product_counter <= settings.MAX_PRODUCTS and booster_needed:
+            print('[*] Not enough data: live crawl triggered.')
+            dump = asyncio.run(crawl_url(url))
+            page_counter = cc_page_counter
+            dom_enabled = True
+
+
+            # TODO: skip already URLs from Common Crawl
+            # TODO: check shuffel
+            # TODO: crawl header with bs4
+
+            for record in dump:
+                html_content = record.get('content')
+                header = ''
+
+                # storing count of technologies found to compare
+                previous_count = len(detected_technology)
+
+                detected_technology.update(get_technology(url, html_content, parse_header(header), dom_enabled))
+                print(f'[*] {len(detected_technology)} technologies for {url} detected, DOM: {dom_enabled}')
+
+                # checking if new technology was found
+                if len(detected_technology) > previous_count:
+                    dom_change_counter = 0
+                    dom_enabled = True  # reactivating dom search
+                else:
+                    dom_change_counter += 1  # no new technology found
+                    if dom_change_counter > dom_limit:
+                        dom_enabled = False  # deactivating dom search
+
+                if html_content:
+                    metadata = get_markups(html_content)
+                    corpus_data = get_metadata(url, record.get('link'), metadata)
+
+                    # if valid schema found, store results, else test if patterns might work
+                    product_schema = False
+
+                    # check retrieved schemas from source code
+                    if check_nones(corpus_data, 3):
+                        # now that there is useful metadata we can add page title, description and lang code
+                        additional_data = get_additional_data(html_content)
+                        for key in additional_data:
+                            corpus_data[key] = additional_data[key]
+                        corpus_data['archive_year'] = 'LIVE-CRAWL'
+                        corpus_data['last_update'] = update_date
+
+                        # building string for later translation/classification task
+                        title = str(corpus_data.get('product_title', '')).strip()
+                        description = str(corpus_data.get('product_description', '')).strip()
+
+                        invalid_values = {None, 'none', 'null', 'undefined', ''}
+
+                        if title not in invalid_values:
+                            if description not in invalid_values:
+                                product_string = title + '. ' + description
+                            else:
+                                product_string = description
+                        else:
+                            product_string = description
+
+                        if product_string is not None and len(product_string) > 0:
+                            detected_lang = langid.classify(product_string)[0]
+                            corpus_data['detected_language'] = detected_lang
+                            product_schema = True
+                            corpus_data['product_schema'] = product_schema
+
+                            print(f'[*] Found product for {url} with schema: {title}')
+                            product_counter += 1
+                            product_list.append(corpus_data)
+
+                    # starting pattern search
+                    if not product_schema:
+                        if identify_product(record.get('link')):
+                            additional_data = get_additional_data(html_content)
+                            for key in additional_data:
+                                corpus_data[key] = additional_data[key]
+                            corpus_data['archive_year'] = 'LIVE-CRAWL'
+                            corpus_data['last_update'] = update_date
+
+                            # building string for later translation/classification task
+                            title = str(corpus_data.get('page_title', '')).strip()
+                            description = str(corpus_data.get('page_description', '')).strip()
+
+                            invalid_values = {None, 'none', 'null', 'undefined', ''}
+
+                            if title not in invalid_values:
+                                if description not in invalid_values:
+                                    product_string = title + '. ' + description
+                                else:
+                                    product_string = description
+                            else:
+                                product_string = description
+
+                            if product_string is not None and len(product_string) > 0:
+                                detected_lang = langid.classify(product_string)[0]
+                                corpus_data['detected_language'] = detected_lang
+
+                                corpus_data['product_title'] = title
+                                corpus_data['product_description'] = description
+                                corpus_data['product_schema'] = product_schema
+
+                                currency = get_currency_from_html(html_content)
+                                price = get_price_from_html(html_content)
+                                if currency and price:
+                                    corpus_data['price'] = price
+                                    corpus_data['currency'] = currency
+
+                                print(f'[*] Found product for {url} with patterns: {title}')
+                                product_counter += 1
+                                product_list.append(corpus_data)
+
+                    link_list = extract_external_links(url, html_content, link_list)
+
+                # some tracking
+                page_counter += 1
+                progress = (page_counter / (target + len(dump)) * 100) if target else 0
+                print(f'[*] Found {product_counter} products out of {page_counter} pages at {progress:.2f}% checked.')
+
+            record_count = cc_record_count + len(dump)
+
+        ########################################
+        #            STORING RESULTS           #
+        ########################################
 
         ### Detected Products of Shop
         count_schema = 0
@@ -305,8 +444,10 @@ def crawl_common_crawl(url_list, index_list, query_year):
         tracking_data = {
             'domain': [url],
             'archive_year': [query_year],
-            'record_count_unique': [record_count],
-            'record_count_checked': [page_counter],
+            'archive_record_count_unique': [cc_record_count],
+            'archive_record_count_checked': [cc_page_counter],
+            'total_record_count_unique': [record_count],
+            'total_record_count_checked': [page_counter],
             'product_count_schema': [count_schema],
             'product_count_pattern': [count_patterns],
             'last_update': [update_date]

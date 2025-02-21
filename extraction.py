@@ -83,83 +83,90 @@ def get_markups(html_data):
 
 
 def get_description(metadata):
-    key_trigger = ['og:description', 'description', 'Description']
-    for key in metadata.keys():
-        for trigger in key_trigger:
-            if key == trigger:
-                res = clean_string(metadata.get(trigger))
-                return html.unescape(res)
-    if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    res = clean_string(metadata['offers'].get(trigger))
-                    return html.unescape(res)
+    key_trigger = {'og:description', 'description', 'Description'}
+    for key in metadata:
+        if key in key_trigger and isinstance(metadata[key], str):
+            return html.unescape(clean_string(metadata[key]))
+
+    offers = metadata.get("offers")
+    if isinstance(offers, dict):
+        for key in offers:
+            if key in key_trigger and isinstance(offers[key], str):
+                return html.unescape(clean_string(offers[key]))
+    elif isinstance(offers, list):
+        for offer in offers:
+            if isinstance(offer, dict):
+                for key in offer:
+                    if key in key_trigger and isinstance(offer[key], str):
+                        return html.unescape(clean_string(offer[key]))
     return None
 
 
 def get_title(metadata):
-    key_trigger = ['title', 'Title', 'og:title', 'name']
-    for key in metadata.keys():
-        for trigger in key_trigger:
-            if key == trigger:
-                res = clean_string(metadata.get(trigger))
-                return html.unescape(res)
-    if 'offers' in metadata.keys():
-        if metadata['offers']:
-            for key in metadata['offers']:
-                for trigger in key_trigger:
-                    if key == trigger:
-                        res = clean_string(metadata['offers'].get(trigger))
-                        return html.unescape(res)
+    key_trigger = {'title', 'Title', 'og:title', 'name'}
+    for key in metadata:
+        if key in key_trigger and isinstance(metadata[key], str):
+            return html.unescape(clean_string(metadata[key]))
+
+    offers = metadata.get("offers")
+    if isinstance(offers, dict):
+        for key in offers:
+            if key in key_trigger and isinstance(offers[key], str):
+                return html.unescape(clean_string(offers[key]))
+    elif isinstance(offers, list):
+        for offer in offers:
+            if isinstance(offer, dict):
+                for key in offer:
+                    if key in key_trigger and isinstance(offer[key], str):
+                        return html.unescape(clean_string(offer[key]))
     return None
 
 
 def get_brand(metadata):
-    key_trigger = ['brand', 'Brand', 'product:brand', 'object']
-    for key in metadata.keys():
-        for trigger in key_trigger:
-            if key == trigger:
-                if trigger == 'object' and type(metadata.get(trigger)) == dict:
-                    return clean_string(metadata.get(trigger).get('brand').get('name'))
-                if type(metadata.get(trigger)) == dict:
-                    return clean_string(metadata.get(trigger).get('name'))
-                else:
-                    return clean_string(metadata.get(trigger))
-    if 'offers' in metadata.keys():
-        if metadata['offers']:
-            for key in metadata['offers']:
-                for trigger in key_trigger:
-                    if key == trigger:
-                        return clean_string(metadata['offers'].get(trigger))
+    key_trigger = {'brand', 'Brand', 'product:brand', 'object'}
+    for key in metadata:
+        if key in key_trigger:
+            value = metadata.get(key)
+            if isinstance(value, dict):
+                if key == 'object':
+                    brand_data = value.get("brand", {})
+                    return clean_string(brand_data.get("name")) if isinstance(brand_data, dict) else None
+                return clean_string(value.get("name"))
+            if isinstance(value, str):
+                return clean_string(value)
+
+    offers = metadata.get("offers")
+    if isinstance(offers, dict):
+        for key in offers:
+            if key in key_trigger and isinstance(offers[key], str):
+                return clean_string(offers[key])
+    elif isinstance(offers, list):
+        for offer in offers:
+            if isinstance(offer, dict):
+                for key in offer:
+                    if key in key_trigger and isinstance(offer[key], str):
+                        return clean_string(offer[key])
     return None
 
 
 def get_category(metadata):
-    key_trigger = ['category', 'Category']
-    for key in metadata.keys():
-        for trigger in key_trigger:
-            if key == trigger:
-                return clean_string(metadata.get(trigger))
-    if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    return clean_string(metadata['offers'].get(trigger))
+    key_trigger = {'category', 'Category'}
+    for key in metadata:
+        if key in key_trigger and isinstance(metadata[key], str):
+            return html.unescape(clean_string(metadata[key]))
+
+    offers = metadata.get("offers")
+    if isinstance(offers, dict):
+        for key in offers:
+            if key in key_trigger and isinstance(offers[key], str):
+                return html.unescape(clean_string(offers[key]))
+    elif isinstance(offers, list):
+        for offer in offers:
+            if isinstance(offer, dict):
+                for key in offer:
+                    if key in key_trigger and isinstance(offer[key], str):
+                        return html.unescape(clean_string(offer[key]))
     return None
-
-
-def get_breadcrumb(metadata):
-    key_trigger = ['breadcrumb']
-    for key in metadata.keys():
-        for trigger in key_trigger:
-            if key == trigger:
-                return clean_string(metadata.get(trigger))
-    if 'offers' in metadata.keys():
-        for key in metadata['offers']:
-            for trigger in key_trigger:
-                if key == trigger:
-                    return clean_string(metadata['offers'].get(trigger))
 
 
 def get_currency(metadata):
