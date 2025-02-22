@@ -37,6 +37,12 @@ def collect_links(domain, html):
     return list(set(follow_links))
 
 
+def parse_header(header_dict):
+    """ converting header format matching the one from Common Crawl """
+    header_str = "\n".join(f"{key}: {value}" for key, value in header_dict.items())
+    return header_str
+
+
 async def crawl_live(domain):
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -50,8 +56,9 @@ async def crawl_live(domain):
 
             # let's start collecting html content recursively
             html = await page.content()
-            soup = BeautifulSoup(html, 'html.parser')
-            header = soup.head
+            header_raw = response.headers  # header as dict
+            header = parse_header(header_raw)
+
             link_bucket = start_links(r, domain, html)
             done_bucket = [link]
             records = [{'link': link, 'content': html, 'header': header}]
@@ -65,8 +72,9 @@ async def crawl_live(domain):
                     response = await page.goto(lk)
                     if response and response.status == 200:
                         html = await page.content()
-                        soup = BeautifulSoup(html, 'html.parser')
-                        header = soup.head
+                        header_raw = response.headers  # header as dict
+                        header = parse_header(header_raw)
+
                         records.append({'link': lk, 'content': html, 'header': header})
                         link_bucket += collect_links(domain, html)
                         link_bucket = list(set(link_bucket))
