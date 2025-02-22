@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import time
 import random
@@ -82,7 +83,8 @@ def crawl_common_crawl(url_list, index_list, query_year):
         record_count = cc_record_count
 
         random.shuffle(record_list)
-        link_list = []
+        link_list = []      # for external links
+        link_bucket = []    # for website links
         target = len(record_list)
         cc_page_counter = 0
         page_counter = cc_page_counter
@@ -130,6 +132,8 @@ def crawl_common_crawl(url_list, index_list, query_year):
                         if html_content:
                             metadata = get_markups(html_content)
                             corpus_data = get_metadata(url, record['url_path'], metadata)
+                            url_path = f'https://{url}{record["url_path"]}'.rstrip("/")
+                            link_bucket.append(re.sub(r"(\?.+)|(#.+)", "", url_path))
 
                             # if valid schema found, store results, else test if patterns might work
                             product_schema = False
@@ -236,18 +240,15 @@ def crawl_common_crawl(url_list, index_list, query_year):
         # optional live crawl as booster
         if product_counter <= settings.MAX_PRODUCTS and booster_needed:
             print('[*] Not enough data: live crawl triggered.')
-            dump = asyncio.run(crawl_url(url))
+            link_bucket = list(set(link_bucket))
+
+            dump = asyncio.run(crawl_url(url, link_bucket))
             page_counter = cc_page_counter
             dom_enabled = True
 
-
-            # TODO: skip already URLs from Common Crawl
-            # TODO: check shuffel
-            # TODO: crawl header with bs4
-
             for record in dump:
                 html_content = record.get('content')
-                header = ''
+                header = record.get('header')
 
                 # storing count of technologies found to compare
                 previous_count = len(detected_technology)

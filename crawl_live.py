@@ -1,4 +1,3 @@
-import asyncio
 import re
 import settings
 from playwright.async_api import async_playwright
@@ -44,28 +43,36 @@ async def crawl_live(domain):
         page = await browser.new_page()
         response = await page.goto(f'https://{domain}/')
         r = response.url.rstrip("/")
+        print(r)
 
         if domain in r and response.status == 200:
             link = re.sub(r"(\?.+)|(#.+)", "", r)
 
             # let's start collecting html content recursively
             html = await page.content()
+            soup = BeautifulSoup(html, 'html.parser')
+            header = soup.head
             link_bucket = start_links(r, domain, html)
             done_bucket = [link]
-            records = [{'link': link, 'content': html}]
+            records = [{'link': link, 'content': html, 'header': header}]
 
             # recursive crawl and returning the html
             while (len(records) < settings.MAX_LIVE_RECORDS) and (len(link_bucket) > 0):
                 lk = link_bucket.pop(0)
                 print(lk)
 
-                response = await page.goto(lk)
-                if response and response.status == 200:
-                    html = await page.content()
-                    records.append({'link': lk, 'content': html})
-                    link_bucket += collect_links(domain, html)
-                    link_bucket = list(set(link_bucket))
-                    print(len(link_bucket))
+                try:
+                    response = await page.goto(lk)
+                    if response and response.status == 200:
+                        html = await page.content()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        header = soup.head
+                        records.append({'link': lk, 'content': html, 'header': header})
+                        link_bucket += collect_links(domain, html)
+                        link_bucket = list(set(link_bucket))
+                        print(len(link_bucket))
+                except Exception as e:
+                    print(f"Error requesting url: {lk} → {str(e)}")
 
                 done_bucket.append(lk)
                 print(len(done_bucket))
@@ -80,10 +87,14 @@ async def crawl_live(domain):
     return records
 
 
-async def crawl_url(url):
+async def crawl_url(url, link_bucket):
 
     print(f'[*] Started to crawl {url} live and in colour to boost results.')
 
     # connect to website and collect html content
     records = await crawl_live(url)
+
+    # removing records which were already part of Common Crawl
+    records = [record for record in records if record["link"] not in link_bucket]
+
     return records
