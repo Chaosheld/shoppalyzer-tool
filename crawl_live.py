@@ -44,6 +44,7 @@ def parse_header(header_dict):
 
 
 async def crawl_live(domain):
+    records = []
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
