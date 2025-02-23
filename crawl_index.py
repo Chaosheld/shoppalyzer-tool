@@ -69,9 +69,6 @@ def crawl_common_crawl(url_list, index_list, query_year):
         start_time = time.time()
         update_date = datetime.today().strftime('%Y-%m-%d')
 
-        base_path = f"files/output/{url}/{query_year}"
-        os.makedirs(base_path, exist_ok=True)
-
         product_list = []
         product_meta_fields = ['domain', 'url', 'archive_year', 'detected_language', 'product_title',
                                'product_description', 'brand', 'price', 'currency', 'product_schema', 'last_update']
@@ -362,6 +359,9 @@ def crawl_common_crawl(url_list, index_list, query_year):
         ### Detected Products of Shop
         count_schema = 0
         count_patterns = 0
+
+        base_path = f"files/output/{url}/{query_year}"
+        os.makedirs(base_path, exist_ok=True)
 
         if len(product_list) > 0:
             output_file_products = f'{base_path}/products.pq'
