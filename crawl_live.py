@@ -1,5 +1,6 @@
 import re
 import settings
+import tldextract
 from playwright.async_api import async_playwright
 from src.patterns import link_exclusions
 from bs4 import BeautifulSoup
@@ -15,10 +16,10 @@ def start_links(r, domain, html):
             continue
         if link.startswith("http"):
             if domain in link:
-                link = re.sub(r"(\?.+)|(#.+)", "", link)
+                link = re.sub(r"(\?.+)|(#.+)", "", link).replace(" ", "")
                 follow_links.append(link)
         else:
-            link = re.sub(r"(\?.+)|(#.+)", "", (r + link))
+            link = re.sub(r"(\?.+)|(#.+)", "", (r + link)).replace(" ", "")
             follow_links.append(link)
     follow_links = [page_link for page_link in follow_links if not page_link.endswith(tuple(link_exclusions))]
     return list(set(follow_links))
@@ -31,7 +32,7 @@ def collect_links(domain, html):
     for link in links:
         link = link.get("href")
         if link.startswith("http") and domain in link:
-            link = re.sub(r"(\?.+)|(#.+)", "", link)
+            link = re.sub(r"(\?.+)|(#.+)", "", link).replace(" ", "")
             follow_links.append(link)
     follow_links = [page_link for page_link in follow_links if not page_link.endswith(tuple(link_exclusions))]
     return list(set(follow_links))
@@ -46,14 +47,25 @@ def parse_header(header_dict):
 async def crawl_live(domain):
     records = []
     async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
-        response = await page.goto(f'https://{domain}/')
-        r = response.url.rstrip("/")
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+        page = await context.new_page()
+        page.set_default_timeout(60000)
+        response = await page.goto(f'http://{domain}/', timeout=60000, wait_until="networkidle")
+        extracted = tldextract.extract(response.url)
+        extracted_domain = extracted.registered_domain
+
+        pattern = r"^(https?://(?:[^/]+\.)?{0})(?:/.*)?$".format(re.escape(domain))
+        match = re.match(pattern, response.url)
+        if match:
+            r = match.group(1)
+        else:
+            r = response.url.rstrip("/")
         print(r)
 
-        if domain in r and response.status == 200:
-            link = re.sub(r"(\?.+)|(#.+)", "", r)
+        if domain in extracted_domain and response.status == 200:
+            link = re.sub(r"(\?.+)|(#.+)", "", r).replace(" ", "")
 
             # let's start collecting html content recursively
             html = await page.content()

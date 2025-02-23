@@ -238,7 +238,7 @@ def crawl_common_crawl(url_list, index_list, query_year):
         ########################################
 
         # optional live crawl as booster
-        if product_counter <= settings.MAX_PRODUCTS and booster_needed:
+        if (product_counter <= settings.MAX_PRODUCTS and booster_needed) or len(record_list) == 0:
             print('[*] Not enough data: live crawl triggered.')
             link_bucket = list(set(link_bucket))
 
