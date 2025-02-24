@@ -84,7 +84,7 @@ def crawl_common_crawl(url_list, index_list, query_year):
         link_bucket = []    # for website links
         target = len(record_list)
         cc_page_counter = 0
-        page_counter = cc_page_counter
+        page_counter = 0
         product_counter = 0
 
         batch_size = settings.BATCH_SIZE
@@ -240,7 +240,7 @@ def crawl_common_crawl(url_list, index_list, query_year):
             link_bucket = list(set(link_bucket))
 
             dump = asyncio.run(crawl_url(url, link_bucket))
-            page_counter = cc_page_counter
+            page_counter = page_counter + cc_page_counter
             dom_enabled = True
 
             for record in dump:
