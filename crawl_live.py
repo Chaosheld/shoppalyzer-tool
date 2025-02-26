@@ -52,57 +52,61 @@ async def crawl_live(domain):
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
         page = await context.new_page()
         page.set_default_timeout(60000)
-        response = await page.goto(f'http://{domain}/', timeout=60000, wait_until="networkidle")
-        extracted = tldextract.extract(response.url)
-        extracted_domain = extracted.registered_domain
+        try:
+            response = await page.goto(f'http://{domain}/', wait_until="networkidle")
+            extracted = tldextract.extract(response.url)
+            extracted_domain = extracted.registered_domain
 
-        pattern = r"^(https?://(?:[^/]+\.)?{0})(?:/.*)?$".format(re.escape(domain))
-        match = re.match(pattern, response.url)
-        if match:
-            r = match.group(1)
-        else:
-            r = response.url.rstrip("/")
-        print(r)
+            pattern = r"^(https?://(?:[^/]+\.)?{0})(?:/.*)?$".format(re.escape(domain))
+            match = re.match(pattern, response.url)
+            if match:
+                r = match.group(1)
+            else:
+                r = response.url.rstrip("/")
+            print(r)
 
-        if domain in extracted_domain and response.status == 200:
-            link = re.sub(r"(\?.+)|(#.+)", "", r).replace(" ", "")
+            if domain in extracted_domain and response.status == 200:
+                link = re.sub(r"(\?.+)|(#.+)", "", r).replace(" ", "")
 
-            # let's start collecting html content recursively
-            html = await page.content()
-            header_raw = response.headers  # header as dict
-            header = parse_header(header_raw)
+                # let's start collecting html content recursively
+                html = await page.content()
+                header_raw = response.headers  # header as dict
+                header = parse_header(header_raw)
 
-            link_bucket = start_links(r, domain, html)
-            done_bucket = [link]
-            records = [{'link': link, 'content': html, 'header': header}]
+                link_bucket = start_links(r, domain, html)
+                done_bucket = [link]
+                records = [{'link': link, 'content': html, 'header': header}]
 
-            # recursive crawl and returning the html
-            while (len(records) < settings.MAX_LIVE_RECORDS) and (len(link_bucket) > 0):
-                lk = link_bucket.pop(0)
-                print(lk)
+                # recursive crawl and returning the html
+                while (len(records) < settings.MAX_LIVE_RECORDS) and (len(link_bucket) > 0):
+                    lk = link_bucket.pop(0)
+                    print(lk)
 
-                try:
-                    response = await page.goto(lk)
-                    if response and response.status == 200:
-                        html = await page.content()
-                        header_raw = response.headers  # header as dict
-                        header = parse_header(header_raw)
+                    try:
+                        response = await page.goto(lk)
+                        if response and response.status == 200:
+                            html = await page.content()
+                            header_raw = response.headers  # header as dict
+                            header = parse_header(header_raw)
 
-                        records.append({'link': lk, 'content': html, 'header': header})
-                        link_bucket += collect_links(domain, html)
-                        link_bucket = list(set(link_bucket))
-                        print(len(link_bucket))
-                except Exception as e:
-                    print(f"Error requesting url: {lk} → {str(e)}")
+                            records.append({'link': lk, 'content': html, 'header': header})
+                            link_bucket += collect_links(domain, html)
+                            link_bucket = list(set(link_bucket))
+                            print(len(link_bucket))
+                    except Exception as e:
+                        print(f"Error requesting url: {lk} → {str(e)}")
 
-                done_bucket.append(lk)
-                print(len(done_bucket))
+                    done_bucket.append(lk)
+                    print(len(done_bucket))
 
-                # clean list_bucket if already known links where collected
-                link_bucket = [page_link for page_link in link_bucket if page_link not in done_bucket]
-                print(len(link_bucket))
+                    # clean list_bucket if already known links where collected
+                    link_bucket = [page_link for page_link in link_bucket if page_link not in done_bucket]
+                    print(len(link_bucket))
 
-            print(len(records))
+                print(len(records))
+
+        except Exception as e:
+            print(f'An error occurred trying to crawl {domain} live: {e}')
 
         await browser.close()
     return records

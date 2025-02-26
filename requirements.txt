@@ -69,3 +69,4 @@ duckdb>=1.2.0
 pyee>=12.1.1
 greenlet>=3.1.1
 playwright>=1.50.0
+tldextract>=5.1.3
